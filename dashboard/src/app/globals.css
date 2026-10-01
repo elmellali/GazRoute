@@ -1,0 +1,793 @@
+/* ==========================================================================
+   GAZ DISTRIBUTION · ARCHITECTURAL DESIGN SYSTEM & EDITORIAL LANGUAGE
+   Strict constraints:
+   - Typography: Space Grotesk (Headlines) + Plus Jakarta Sans / IBM Plex Sans Arabic (Body)
+   - Spacing: Strict 4px multiples
+   - Text measure: Max 65ch for prose
+   - Palette: Deep carbon slate + razor-sharp industrial amber accent
+   - Surfaces: Raw borders, zero soft pill cards, atmospheric depth
+   - Motion: Single staggered page entrance under 300ms ease-out
+   ========================================================================== */
+
+:root {
+  /* Dominant Carbon Background Palette */
+  --bg-base: #080c12;
+  --bg-surface-1: #0e141e;
+  --bg-surface-2: #141c2a;
+  --bg-surface-3: #1a2436;
+  --bg-active: #202d42;
+
+  /* High-Contrast Inks (WCAG AA & AAA Compliant) */
+  --ink-primary: #f8fafc;
+  --ink-secondary: #cbd5e1;
+  --ink-muted: #94a3b8;
+  --ink-faint: #64748b;
+
+  /* Intentional Sharp Industrial Accent */
+  --accent: #f59e0b;
+  --accent-glow: rgba(245, 158, 11, 0.16);
+  --accent-hover: #d97706;
+  --accent-contrast: #080c12;
+
+  /* High-Contrast Functional Semantic Signals */
+  --signal-ok: #10b981;
+  --signal-ok-bg: rgba(16, 185, 129, 0.12);
+  --signal-ok-border: #059669;
+
+  --signal-warn: #f59e0b;
+  --signal-warn-bg: rgba(245, 158, 11, 0.12);
+  --signal-warn-border: #d97706;
+
+  --signal-danger: #ef4444;
+  --signal-danger-bg: rgba(239, 68, 68, 0.14);
+  --signal-danger-border: #dc2626;
+
+  --signal-info: #38bdf8;
+  --signal-info-bg: rgba(56, 189, 248, 0.12);
+  --signal-info-border: #0284c7;
+
+  /* Raw Hairline & Structural Borders */
+  --border-subtle: #1e293b;
+  --border-raw: #29384d;
+  --border-strong: #3b4d66;
+
+  /* Layout Spacing Grid (Strict Multiples of 4px) */
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-40: 40px;
+  --space-48: 48px;
+  --space-64: 64px;
+
+  /* Strict Typography Stacks (No generic defaults) */
+  --font-headline: "Space Grotesk", -apple-system, sans-serif;
+  --font-body: "Plus Jakarta Sans", -apple-system, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;
+  --font-arabic: "IBM Plex Sans Arabic", "Space Grotesk", sans-serif;
+}
+
+/* ==========================================================================
+   RESET & FOUNDATIONS
+   ========================================================================== */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  background-color: var(--bg-base);
+  color: var(--ink-secondary);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.55;
+  font-weight: 400;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* RTL Support for Arabic */
+html[dir="rtl"] body {
+  font-family: var(--font-arabic);
+}
+
+/* Strictly prohibit italics - use font-weight changes for emphasis */
+em, i, cite, var, dfn {
+  font-style: normal !important;
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+
+/* Strict link underline policy: Underline only for inline editorial links */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+a.inline-link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 600;
+}
+
+a.inline-link:hover {
+  color: var(--ink-primary);
+}
+
+/* ==========================================================================
+   TYPOGRAPHY HIERARCHY (SPACE GROTESK HEADLINES)
+   ========================================================================== */
+
+h1, h2, h3, h4, .headline {
+  font-family: var(--font-headline);
+  color: var(--ink-primary);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+html[dir="rtl"] h1,
+html[dir="rtl"] h2,
+html[dir="rtl"] h3,
+html[dir="rtl"] h4 {
+  font-family: var(--font-arabic);
+  letter-spacing: 0;
+}
+
+.page-header {
+  margin-bottom: var(--space-24);
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: var(--space-16);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-16);
+  flex-wrap: wrap;
+}
+
+.page-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+  margin-bottom: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.page-sub {
+  color: var(--ink-muted);
+  font-size: 0.92rem;
+  max-width: 65ch; /* Strict 65-char measure rule */
+  line-height: 1.5;
+}
+
+.prose-limit {
+  max-width: 65ch;
+}
+
+code, .mono {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--bg-surface-3);
+  padding: 2px 6px;
+  border: 1px solid var(--border-raw);
+  color: var(--ink-primary);
+}
+
+/* ==========================================================================
+   PAGE ENTRANCE MOTION (Single high-impact entrance under 300ms)
+   Zero micro-animations on clicks/toggles.
+   ========================================================================== */
+
+@keyframes editorialEntrance {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.main-content {
+  animation: editorialEntrance 240ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: opacity, transform;
+}
+
+/* ==========================================================================
+   MASTER LAYOUT SHELL (ASIDE + MAIN DUAL WORKSPACE)
+   ========================================================================== */
+
+.shell {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: 100vh;
+  background: var(--bg-base);
+}
+
+@media (max-width: 1024px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sidebar {
+  background: var(--bg-surface-1);
+  border-right: 1px solid var(--border-raw);
+  padding: var(--space-20) var(--space-12);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  overflow-y: auto;
+}
+
+html[dir="rtl"] .sidebar {
+  border-right: none;
+  border-left: 1px solid var(--border-raw);
+}
+
+.brand-block {
+  padding: var(--space-8) var(--space-12) var(--space-20);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: var(--space-16);
+}
+
+.brand-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  background: var(--accent-glow);
+  padding: 2px 6px;
+  border: 1px solid var(--accent);
+  margin-bottom: var(--space-8);
+}
+
+.brand-title {
+  font-family: var(--font-headline);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+  letter-spacing: -0.01em;
+}
+
+.brand-sub {
+  font-size: 0.76rem;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 2px;
+}
+
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-8) var(--space-12);
+  color: var(--ink-secondary);
+  font-size: 0.88rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+  border-left: 2px solid transparent;
+  background: transparent;
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+}
+
+html[dir="rtl"] .nav-link {
+  text-align: right;
+  border-left: 1px solid transparent;
+  border-right: 2px solid transparent;
+}
+
+.nav-link:hover {
+  background: var(--bg-surface-2);
+  color: var(--ink-primary);
+  border-color: var(--border-subtle);
+}
+
+.nav-link.active {
+  background: var(--bg-surface-2);
+  color: var(--ink-primary);
+  font-weight: 700;
+  border: 1px solid var(--border-raw);
+  border-left: 2px solid var(--accent);
+}
+
+html[dir="rtl"] .nav-link.active {
+  border-left: 1px solid var(--border-raw);
+  border-right: 2px solid var(--accent);
+}
+
+.nav-link .nav-indicator {
+  font-size: 0.72rem;
+  color: var(--accent);
+  font-family: var(--font-mono);
+}
+
+.sidebar-footer {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.main {
+  padding: var(--space-24) var(--space-32);
+  max-width: 1400px;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .main {
+    padding: var(--space-16);
+  }
+}
+
+/* ==========================================================================
+   SURFACE & DEPTH: RAW ARCHITECTURAL PANELS & SPLIT GRIDS
+   ========================================================================== */
+
+.panel {
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-raw);
+  padding: var(--space-20);
+  margin-bottom: var(--space-20);
+  position: relative;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-16);
+  padding-bottom: var(--space-12);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.panel-title {
+  font-family: var(--font-headline);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.panel-sub {
+  font-size: 0.8rem;
+  color: var(--ink-muted);
+  margin-top: 2px;
+}
+
+/* Asymmetric / Editorial 2-Column and Hero Grids */
+.editorial-grid-hero {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: var(--space-20);
+  margin-bottom: var(--space-20);
+}
+
+.editorial-grid-split {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: var(--space-20);
+  margin-bottom: var(--space-20);
+}
+
+.editorial-grid-tri {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: var(--space-16);
+  margin-bottom: var(--space-20);
+}
+
+@media (max-width: 1024px) {
+  .editorial-grid-hero,
+  .editorial-grid-split,
+  .editorial-grid-tri {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Hero Monolith Diagnostic Block */
+.focal-hero-block {
+  background: linear-gradient(135deg, var(--bg-surface-2) 0%, var(--bg-surface-1) 100%);
+  border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--accent);
+  padding: var(--space-24);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+html[dir="rtl"] .focal-hero-block {
+  border-left: 1px solid var(--border-strong);
+  border-right: 3px solid var(--accent);
+}
+
+.focal-hero-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-16);
+}
+
+.focal-hero-value {
+  font-family: var(--font-headline);
+  font-size: 2.75rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  margin-bottom: var(--space-8);
+}
+
+.kpi-deck {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-12);
+}
+
+.kpi-card {
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-raw);
+  padding: var(--space-16);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.kpi-card.alert-high {
+  border-left: 3px solid var(--signal-danger);
+}
+
+html[dir="rtl"] .kpi-card.alert-high {
+  border-left: 1px solid var(--border-raw);
+  border-right: 3px solid var(--signal-danger);
+}
+
+.kpi-card.alert-warn {
+  border-left: 3px solid var(--signal-warn);
+}
+
+html[dir="rtl"] .kpi-card.alert-warn {
+  border-left: 1px solid var(--border-raw);
+  border-right: 3px solid var(--signal-warn);
+}
+
+.kpi-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+  margin-bottom: var(--space-8);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.kpi-val {
+  font-family: var(--font-headline);
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--ink-primary);
+  line-height: 1.1;
+}
+
+/* ==========================================================================
+   TABLES & EDITORIAL DATA LEDGERS
+   ========================================================================== */
+
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  text-align: left;
+}
+
+html[dir="rtl"] table {
+  text-align: right;
+}
+
+thead {
+  background: var(--bg-surface-2);
+  border-bottom: 1px solid var(--border-raw);
+}
+
+th {
+  padding: var(--space-8) var(--space-12);
+  font-family: var(--font-headline);
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+}
+
+td {
+  padding: var(--space-12);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--ink-secondary);
+  vertical-align: middle;
+}
+
+tbody tr:hover {
+  background: var(--bg-surface-2);
+}
+
+tbody tr.selected-row {
+  background: var(--bg-active);
+  outline: 1px solid var(--accent);
+}
+
+/* ==========================================================================
+   BADGES & MULTI-CHANNEL STATUS SIGNALS (Never color alone)
+   ========================================================================== */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border: 1px solid transparent;
+  line-height: 1;
+}
+
+.badge.ok {
+  background: var(--signal-ok-bg);
+  color: var(--signal-ok);
+  border-color: var(--signal-ok-border);
+}
+
+.badge.warn {
+  background: var(--signal-warn-bg);
+  color: var(--signal-warn);
+  border-color: var(--signal-warn-border);
+}
+
+.badge.danger {
+  background: var(--signal-danger-bg);
+  color: var(--signal-danger);
+  border-color: var(--signal-danger-border);
+}
+
+.badge.info {
+  background: var(--signal-info-bg);
+  color: var(--signal-info);
+  border-color: var(--signal-info-border);
+}
+
+.badge.neutral {
+  background: var(--bg-surface-3);
+  color: var(--ink-secondary);
+  border-color: var(--border-raw);
+}
+
+/* ==========================================================================
+   BUTTONS & CONTROLS (Zero micro-animations)
+   ========================================================================== */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-family: var(--font-headline);
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: var(--space-8) var(--space-16);
+  border: 1px solid var(--accent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn.secondary {
+  background: var(--bg-surface-2);
+  color: var(--ink-primary);
+  border: 1px solid var(--border-raw);
+}
+
+.btn.secondary:hover {
+  background: var(--bg-surface-3);
+  border-color: var(--border-strong);
+}
+
+.btn.danger {
+  background: var(--signal-danger);
+  color: #ffffff;
+  border-color: var(--signal-danger);
+}
+
+.btn.danger:hover {
+  background: #dc2626;
+}
+
+.btn.sm {
+  padding: 4px var(--space-8);
+  font-size: 0.78rem;
+}
+
+/* ==========================================================================
+   INPUTS & FORM CONTROLS
+   ========================================================================== */
+
+.input {
+  width: 100%;
+  background: var(--bg-surface-3);
+  border: 1px solid var(--border-raw);
+  color: var(--ink-primary);
+  padding: var(--space-8) var(--space-12);
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  outline: none;
+}
+
+.input:focus {
+  border-color: var(--accent);
+  background: var(--bg-surface-2);
+}
+
+select.input {
+  cursor: pointer;
+}
+
+textarea.input {
+  font-family: var(--font-body);
+  resize: vertical;
+}
+
+label.form-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+  margin-bottom: var(--space-4);
+}
+
+/* ==========================================================================
+   ALERTS, NOTICES & UTILITY ROWS
+   ========================================================================== */
+
+.alert-banner {
+  padding: var(--space-12) var(--space-16);
+  margin-bottom: var(--space-16);
+  border-left: 3px solid transparent;
+  font-size: 0.88rem;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.alert-banner.error {
+  background: var(--signal-danger-bg);
+  border-left-color: var(--signal-danger);
+  color: #fca5a5;
+  border: 1px solid var(--signal-danger-border);
+}
+
+.alert-banner.success {
+  background: var(--signal-ok-bg);
+  border-left-color: var(--signal-ok);
+  color: #6ee7b7;
+  border: 1px solid var(--signal-ok-border);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex-wrap: wrap;
+}
+
+.muted {
+  color: var(--ink-muted);
+}
+
+/* Map Containers */
+.map-box {
+  height: 480px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-raw);
+  position: relative;
+  overflow: hidden;
+}
+
+.leaflet-container {
+  height: 100% !important;
+  width: 100% !important;
+  background: #0b1118 !important;
+}
+
+/* Modal Overlay */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 7, 11, 0.85);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-16);
+}
+
+.modal-content {
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-strong);
+  width: 100%;
+  max-width: 640px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: var(--space-24);
+}
+
+/* Login Brutalist Portal */
+.login-wrap {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-16);
+  background: radial-gradient(circle at 50% 30%, #151e2c 0%, var(--bg-base) 70%);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-strong);
+  border-top: 3px solid var(--accent);
+  padding: var(--space-32);
+}
