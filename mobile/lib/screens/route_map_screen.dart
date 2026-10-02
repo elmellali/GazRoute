@@ -51,9 +51,21 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
     }
   }
 
-  String _errorText(AppLocalizations l) {
+  String _errorText(AppLocalizations l, bool isAr) {
     if (_errorKey == 'noRoutes') return l.noRoutes;
     if (_errorKey == 'noGps') return l.noGps;
+    if (_errorRaw != null) {
+      if (_errorRaw!.contains('TimeoutException')) {
+        return isAr
+            ? 'انتهت مهلة الاتصال بالخادم. يرجى التحقق من تشغيل الخادم والاتصال بالشبكة.'
+            : 'Délai d\'attente dépassé. Vérifiez la connexion au serveur.';
+      }
+      if (_errorRaw!.contains('SocketException') || _errorRaw!.contains('Connection refused')) {
+        return isAr
+            ? 'تعذر الاتصال بالخادم المحلي. يرجى التأكد من تشغيل الخادم على المنفذ 8000.'
+            : 'Impossible de joindre le serveur. Vérifiez qu\'il est démarré sur le port 8000.';
+      }
+    }
     return _errorRaw ?? _errorKey ?? '';
   }
 
@@ -64,11 +76,15 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _errorKey = null;
+      _errorRaw = null;
+    });
     try {
       final api = ApiClient.instance;
-      final routes = await api.get('/api/v1/routes/mine') as List;
-      if (routes.isEmpty) {
+      final routes = await api.get('/api/v1/routes/mine') as List?;
+      if (routes == null || routes.isEmpty) {
         setState(() {
           _errorKey = 'noRoutes';
           _loading = false;
@@ -254,7 +270,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                         ),
                         StatusBadge(
                           label: '${_stops.length} ${isAr ? "نقاط" : "STOPS"}',
-                          status: 'PENDING',
+                          status: _stops.isNotEmpty ? 'COMPLETED' : 'PENDING',
                         ),
                       ],
                     ),
@@ -268,7 +284,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                   const SizedBox(height: 8),
 
                   // Stop cards
-                  if (_stops.isEmpty && _errorKey == null)
+                  if (_stops.isEmpty && _errorKey == null && _errorRaw == null)
                     RawPanel(
                       padding: const EdgeInsets.all(24),
                       child: Center(
@@ -492,19 +508,41 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
                   if (_errorKey != null || _errorRaw != null) ...[
                     const SizedBox(height: 16),
                     Container(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: const Color(0x22EF4444),
                         border: Border.all(color: AppTheme.statusRed),
                       ),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.error_outline, color: AppTheme.statusRed, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _errorText(l),
-                              style: AppTheme.body(context, size: 12, color: AppTheme.statusRed),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.error_outline, color: AppTheme.statusRed, size: 20),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  _errorText(l, isAr),
+                                  style: AppTheme.body(context, size: 13, color: AppTheme.statusRed),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              style: TextButton.styleFrom(
+                                foregroundColor: AppTheme.accentAmber,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              ),
+                              onPressed: _load,
+                              icon: const Icon(Icons.refresh, size: 16),
+                              label: Text(
+                                isAr ? 'إعادة المحاولة' : 'Réessayer',
+                                style: AppTheme.label(context, color: AppTheme.accentAmber),
+                              ),
                             ),
                           ),
                         ],

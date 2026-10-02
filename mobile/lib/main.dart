@@ -14,9 +14,11 @@ import 'screens/safety_report_screen.dart';
 import 'services/outbox_service.dart';
 import 'services/sync_service.dart';
 import 'theme/app_theme.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  GoogleFonts.config.allowRuntimeFetching = false;
   await OutboxService.instance.db;
   runApp(const GazFieldApp());
 }
