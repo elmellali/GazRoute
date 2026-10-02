@@ -58,6 +58,15 @@ export async function api<T = unknown>(
   return (await res.json()) as T;
 }
 
+export async function loginWithPassword(phone: string, password: string): Promise<Tokens> {
+  const t = await api<Tokens>("/api/v1/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ phone, password, device_id: "dashboard-web" }),
+  });
+  setTokens(t);
+  return t;
+}
+
 export async function requestOtp(phone: string): Promise<{ dev_code?: string; expires_in_seconds: number }> {
   return api("/api/v1/auth/otp/request", { method: "POST", body: JSON.stringify({ phone }) });
 }

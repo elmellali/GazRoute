@@ -34,6 +34,12 @@ class OtpVerifyIn(BaseModel):
     device_id: str | None = None
 
 
+class LoginPasswordIn(BaseModel):
+    phone: str
+    password: str = Field(min_length=4)
+    device_id: str | None = None
+
+
 class TokenOut(BaseModel):
     access_token: str
     refresh_token: str
