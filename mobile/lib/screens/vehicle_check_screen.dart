@@ -51,6 +51,31 @@ class _VehicleCheckScreenState extends State<VehicleCheckScreen> {
   Future<void> _load() async {
     try {
       final api = ApiClient.instance;
+      final prefs = await SharedPreferences.getInstance();
+
+      // Check if agent already has an active shift; if so, resume directly
+      try {
+        final activeShift = await api.get('/api/v1/shifts/me/active');
+        if (activeShift != null && activeShift is Map && activeShift['id'] != null) {
+          final sId = activeShift['id'] as String;
+          final vId = activeShift['vehicle_id'] as String?;
+          await prefs.setString('shift_id', sId);
+          await prefs.setBool('shift_started', true);
+          if (vId != null) await prefs.setString('vehicle_id', vId);
+
+          await GeofenceService.instance.startShiftMonitoring();
+
+          if (mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (_) => RouteMapScreen(onLocaleChanged: widget.onLocaleChanged),
+              ),
+            );
+            return;
+          }
+        }
+      } catch (_) {}
+
       final vehicles = await api.get('/api/v1/vehicles') as List;
       setState(() {
         _vehicles = vehicles.cast<Map<String, dynamic>>();
@@ -108,12 +133,42 @@ class _VehicleCheckScreenState extends State<VehicleCheckScreen> {
         ),
       );
     } catch (e) {
+      // If the agent already has an active shift, resume it gracefully
+      if (e.toString().contains('already has an active shift')) {
+        try {
+          final activeShift = await ApiClient.instance.get('/api/v1/shifts/me/active');
+          if (activeShift != null && activeShift is Map && activeShift['id'] != null) {
+            final sId = activeShift['id'] as String;
+            final vId = activeShift['vehicle_id'] as String? ?? _vehicleId;
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('shift_id', sId);
+            await prefs.setBool('shift_started', true);
+            if (vId != null) await prefs.setString('vehicle_id', vId);
+
+            await GeofenceService.instance.startShiftMonitoring();
+
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Shift actif repris avec succès')),
+              );
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (_) => RouteMapScreen(onLocaleChanged: widget.onLocaleChanged),
+                ),
+              );
+              return;
+            }
+          }
+        } catch (_) {}
+      }
+
       setState(() {
         _error = e.toString();
         _busy = false;
       });
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
