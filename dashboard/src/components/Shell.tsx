@@ -16,6 +16,7 @@ const NAV: { href: string; num: string; key: keyof Dict | string }[] = [
   { href: "/cash", num: "06", key: "nav6" },
   { href: "/safety", num: "07", key: "nav7" },
   { href: "/audit", num: "08", key: "nav8" },
+  { href: "/users", num: "09", key: "nav9" },
 ];
 
 function subscribeAuth(callback: () => void) {

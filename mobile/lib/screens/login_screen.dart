@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gaz_field_agent/l10n/app_localizations.dart';
 
 import '../services/api_client.dart';
+import '../services/biometric_service.dart';
 import '../theme/app_theme.dart';
 import 'permissions_screen.dart';
 
@@ -25,6 +26,56 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _error;
   bool _busy = false;
   bool _codeSent = false;
+  bool _hasBiometrics = false;
+  bool _hasSavedSession = false;
+  String _biometricLabel = 'Biométrie Sécurisée';
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBiometrics();
+  }
+
+  Future<void> _checkBiometrics() async {
+    final isAvailable = await BiometricService.instance.isBiometricAvailable;
+    final hasSession = await BiometricService.instance.hasSavedSession();
+    if (!mounted) return;
+    final isAr = Localizations.localeOf(context).languageCode == 'ar';
+    final label = await BiometricService.instance.getBiometricLabel(isAr: isAr);
+
+    if (mounted) {
+      setState(() {
+        _hasBiometrics = isAvailable;
+        _hasSavedSession = hasSession;
+        _biometricLabel = label;
+      });
+    }
+
+    // Auto-prompt biometric authentication if previously authenticated session exists
+    if (isAvailable && hasSession) {
+      _authenticateWithBiometrics();
+    }
+  }
+
+  Future<void> _authenticateWithBiometrics() async {
+    final isAr = Localizations.localeOf(context).languageCode == 'ar';
+    final reason = isAr
+        ? 'المصادقة البيومترية لسائق التوزيع للوصول المباشر'
+        : 'Authentification biométrique chauffeur GazRoute pour accès direct';
+
+    final authenticated = await BiometricService.instance.authenticate(
+      reason: reason,
+      cancelButton: isAr ? 'إلغاء' : 'Annuler',
+    );
+
+    if (authenticated && mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => PermissionsScreen(onLocaleChanged: widget.onLocaleChanged),
+        ),
+      );
+    }
+  }
 
   Future<void> _requestOtp() async {
     setState(() {
@@ -78,6 +129,9 @@ class _LoginScreenState extends State<LoginScreen> {
       await prefs.setString('refresh_token', data['refresh_token'] as String);
       await prefs.setString('role', data['role'] as String);
       await prefs.setString('tenant_id', data['tenant_id'] as String);
+      await prefs.setString('user_phone', _phone.text.trim());
+      await prefs.setBool('biometric_enabled', true);
+
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
@@ -96,11 +150,14 @@ class _LoginScreenState extends State<LoginScreen> {
         ? const Locale('fr')
         : const Locale('ar');
     await widget.onLocaleChanged?.call(next);
+    _checkBiometrics();
   }
 
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
+    final isAr = Localizations.localeOf(context).languageCode == 'ar';
+
     return Scaffold(
       backgroundColor: AppTheme.bgBase,
       body: SafeArea(
@@ -157,6 +214,70 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: AppTheme.bodyFont(context, fontSize: 12, color: AppTheme.inkMuted),
                       ),
                       const SizedBox(height: AppTheme.space24),
+
+                      // Biometric quick-access banner if enabled
+                      if (_hasBiometrics && _hasSavedSession) ...[
+                        RawPanel(
+                          borderColor: AppTheme.accent,
+                          backgroundColor: AppTheme.bgSurface2,
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.fingerprint, color: AppTheme.accent, size: 28),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _biometricLabel,
+                                          style: AppTheme.headlineFont(context, fontSize: 14, fontWeight: FontWeight.w700),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          isAr ? 'جلسة سابقة محفوظة ومحمية' : 'Session chauffeur mémorisée',
+                                          style: AppTheme.bodyFont(context, fontSize: 11, color: AppTheme.inkMuted),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.accent,
+                                  foregroundColor: AppTheme.bgCarbon,
+                                ),
+                                onPressed: _authenticateWithBiometrics,
+                                icon: const Icon(Icons.lock_open, size: 18),
+                                label: Text(
+                                  (isAr ? 'دخول سريع بالبصمة / الوجه' : 'Déverrouiller par Biométrie').toUpperCase(),
+                                  style: AppTheme.headlineFont(context, fontSize: 12, fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            const Expanded(child: Divider(color: AppTheme.borderRaw)),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              child: Text(
+                                isAr ? 'أو عبر رمز التحقق SMS' : 'OU PAR CODE SMS',
+                                style: AppTheme.label(context, size: 10, color: AppTheme.inkMuted),
+                              ),
+                            ),
+                            const Expanded(child: Divider(color: AppTheme.borderRaw)),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                      ],
 
                       const Text('NUMÉRO DE TÉLÉPHONE (COMPTE AGENT)', style: TextStyle(color: AppTheme.inkMuted, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
                       const SizedBox(height: AppTheme.space4),
@@ -237,4 +358,3 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-
