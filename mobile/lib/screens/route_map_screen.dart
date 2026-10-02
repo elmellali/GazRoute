@@ -3,14 +3,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:gaz_field_agent/l10n/app_localizations.dart';
-
+import '../theme/app_theme.dart';
 import '../services/api_client.dart';
 import '../services/geofence_service.dart';
 import 'delivery_flow_screen.dart';
 import 'safety_report_screen.dart';
 import 'reconciliation_screen.dart';
 
-/// Screens D–G: ordered route stop list, map, en-route, arrival card, stop summary.
+/// Route Map & Stops Screen: Editorial sequence list, geofence check-in, stop actions.
 class RouteMapScreen extends StatefulWidget {
   final Future<void> Function(Locale)? onLocaleChanged;
   const RouteMapScreen({super.key, this.onLocaleChanged});
@@ -27,6 +27,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   String? _errorRaw;
   double? _distance;
   bool _arrived = false;
+  bool _loading = true;
 
   String _statusLabel(AppLocalizations l, String? raw) {
     if (raw == null) return '—';
@@ -63,11 +64,15 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   }
 
   Future<void> _load() async {
+    setState(() => _loading = true);
     try {
       final api = ApiClient.instance;
       final routes = await api.get('/api/v1/routes/mine') as List;
       if (routes.isEmpty) {
-        setState(() => _errorKey = 'noRoutes');
+        setState(() {
+          _errorKey = 'noRoutes';
+          _loading = false;
+        });
         return;
       }
       final route = routes.first as Map<String, dynamic>;
@@ -77,12 +82,16 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
         if (stops.isNotEmpty) {
           _stopId = stops.first['id'] as String;
         }
+        _loading = false;
       });
       if (_stopId != null) {
         await _loadStop(_stopId!);
       }
     } catch (e) {
-      setState(() => _errorRaw = e.toString());
+      setState(() {
+        _errorRaw = e.toString();
+        _loading = false;
+      });
     }
   }
 
@@ -108,7 +117,10 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   Future<void> _enRoute() async {
     try {
       await ApiClient.instance.post('/api/v1/routes/stops/$_stopId/en-route', {});
-      setState(() {});
+      if (_stopId != null) {
+        await _loadStop(_stopId!);
+      }
+      await _load();
     } catch (e) {
       setState(() => _errorRaw = e.toString());
     }
@@ -151,11 +163,20 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            '${l.arrived} · ${_distance?.toStringAsFixed(0) ?? '0'} m',
+          backgroundColor: AppTheme.surfaceBright,
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_outline, color: AppTheme.accentAmber, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                '${l.arrived} · ${_distance?.toStringAsFixed(0) ?? '0'} m',
+                style: AppTheme.body(context, color: AppTheme.inkPrimary),
+              ),
+            ],
           ),
         ),
       );
+      await _load();
     } catch (e) {
       setState(() => _errorRaw = e.toString());
     }
@@ -164,21 +185,14 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
+    final isAr = Localizations.localeOf(context).languageCode == 'ar';
+
     return Scaffold(
       appBar: AppBar(
         title: Text(l.routeArrivalTitle),
         actions: [
-          TextButton(
-            onPressed: () async {
-              final next = Localizations.localeOf(context).languageCode == 'ar'
-                  ? const Locale('fr')
-                  : const Locale('ar');
-              await widget.onLocaleChanged?.call(next);
-            },
-            child: Text(l.langToggle),
-          ),
           IconButton(
-            icon: const Icon(Icons.warning, color: Colors.red),
+            icon: const Icon(Icons.warning_amber_rounded, color: AppTheme.statusRed),
             tooltip: l.safetyReport,
             onPressed: () => Navigator.push(
               context,
@@ -188,92 +202,318 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.inventory_2_outlined),
+            icon: const Icon(Icons.inventory_2_outlined, color: AppTheme.accentAmber),
             tooltip: l.reconciliation,
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) =>
-                    ReconciliationScreen(onLocaleChanged: widget.onLocaleChanged),
+                builder: (_) => ReconciliationScreen(onLocaleChanged: widget.onLocaleChanged),
               ),
             ),
+          ),
+          TextButton(
+            onPressed: () async {
+              final next = isAr ? const Locale('fr') : const Locale('ar');
+              await widget.onLocaleChanged?.call(next);
+            },
+            child: Text(l.langToggle, style: AppTheme.label(context, color: AppTheme.accentAmber)),
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(l.stops, style: Theme.of(context).textTheme.titleMedium),
-          ..._stops.map(
-            (s) => Card(
-              child: ListTile(
-                title: Text('${l.stop} ${s['sequence_order']}'),
-                subtitle: Text(_statusLabel(l, s['status'] as String?)),
-                selected: s['id'] == _stopId,
-                onTap: () {
-                  setState(() => _stopId = s['id'] as String);
-                  _loadStop(_stopId!);
-                },
-              ),
-            ),
-          ),
-          if (_outlet != null) ...[
-            const Divider(height: 32),
-            Text(_outlet!['name'] as String,
-                style: Theme.of(context).textTheme.titleLarge),
-            Text('${l.tel}: ${_outlet!['phone']}'),
-            Text('${l.geofence}: ${_outlet!['geofence_radius_m']} m'),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _enRoute,
-                    child: Text(l.enRoute),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: _arrived ? null : () => _confirmArrival(),
-                    child: Text(l.confirmArrival),
-                  ),
-                ),
-              ],
-            ),
-            if (_distance != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  '${l.distance}: ${_distance!.toStringAsFixed(1)} m',
-                ),
-              ),
-            if (_arrived) ...[
-              const SizedBox(height: 16),
-              FilledButton.tonal(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => DeliveryFlowScreen(
-                      stopId: _stopId,
-                      onLocaleChanged: widget.onLocaleChanged,
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: AppTheme.accentAmber))
+          : RefreshIndicator(
+              color: AppTheme.accentAmber,
+              backgroundColor: AppTheme.surfaceDark,
+              onRefresh: _load,
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                children: [
+                  // Status diagnostic header
+                  RawPanel(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: AppTheme.accentAmber,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              isAr ? 'خطة التوزيع الحالية' : 'PLAN DE TOURNÉE ACTIF',
+                              style: AppTheme.label(context, color: AppTheme.inkSecondary),
+                            ),
+                          ],
+                        ),
+                        StatusBadge(
+                          label: '${_stops.length} ${isAr ? "نقاط" : "STOPS"}',
+                          status: 'PENDING',
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                child: Text(l.openDelivery),
-              ),
-            ],
-          ],
-          if (_errorKey != null || _errorRaw != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Text(
-                _errorText(l),
-                style: const TextStyle(color: Colors.red),
+                  const SizedBox(height: 16),
+
+                  Text(
+                    l.stops.toUpperCase(),
+                    style: AppTheme.label(context, color: AppTheme.inkMuted),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Stop cards
+                  if (_stops.isEmpty && _errorKey == null)
+                    RawPanel(
+                      padding: const EdgeInsets.all(24),
+                      child: Center(
+                        child: Text(
+                          isAr ? 'لا توجد محطات مسندة حالياً' : 'Aucun point de livraison planifié.',
+                          style: AppTheme.body(context, color: AppTheme.inkSecondary),
+                        ),
+                      ),
+                    ),
+
+                  ..._stops.map((s) {
+                    final isSelected = s['id'] == _stopId;
+                    final order = s['sequence_order']?.toString() ?? '0';
+                    final status = s['status'] as String? ?? 'PENDING';
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: InkWell(
+                        onTap: () {
+                          setState(() => _stopId = s['id'] as String);
+                          _loadStop(s['id'] as String);
+                        },
+                        child: RawPanel(
+                          borderColor: isSelected ? AppTheme.accentAmber : AppTheme.borderRaw,
+                          backgroundColor: isSelected ? AppTheme.surfaceBright : AppTheme.surfaceDark,
+                          padding: const EdgeInsets.all(14),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: isSelected ? AppTheme.accentAmber : AppTheme.surfaceMuted,
+                                  border: Border.all(
+                                    color: isSelected ? AppTheme.accentAmber : AppTheme.borderRaw,
+                                  ),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  order.padLeft(2, '0'),
+                                  style: AppTheme.headline(
+                                    context,
+                                    size: 14,
+                                    weight: FontWeight.w700,
+                                    color: isSelected ? AppTheme.bgCarbon : AppTheme.inkPrimary,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${l.stop} $order',
+                                      style: AppTheme.headline(context, size: 15, weight: FontWeight.w600),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      _statusLabel(l, status),
+                                      style: AppTheme.body(context, size: 12, color: AppTheme.inkSecondary),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              StatusBadge(
+                                label: _statusLabel(l, status),
+                                status: status,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+
+                  // Active outlet details panel
+                  if (_outlet != null) ...[
+                    const SizedBox(height: 16),
+                    RawPanel(
+                      borderColor: AppTheme.borderRaw,
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.storefront_outlined, color: AppTheme.accentAmber, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _outlet!['name'] as String? ?? 'Point de Vente',
+                                  style: AppTheme.headline(context, size: 18, weight: FontWeight.w700),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          const Divider(height: 1, color: AppTheme.borderRaw),
+                          const SizedBox(height: 12),
+
+                          // Metadata row
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(l.tel.toUpperCase(), style: AppTheme.label(context, color: AppTheme.inkMuted)),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      _outlet!['phone']?.toString() ?? '—',
+                                      style: AppTheme.body(context, color: AppTheme.inkPrimary, weight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(l.geofence.toUpperCase(), style: AppTheme.label(context, color: AppTheme.inkMuted)),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${_outlet!['geofence_radius_m'] ?? 50} m',
+                                      style: AppTheme.body(context, color: AppTheme.inkPrimary, weight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          if (_distance != null) ...[
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: AppTheme.surfaceMuted,
+                                border: Border.all(color: AppTheme.borderRaw),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    _distance! <= (_outlet!['geofence_radius_m'] ?? 50)
+                                        ? Icons.gps_fixed
+                                        : Icons.gps_not_fixed,
+                                    size: 16,
+                                    color: _distance! <= (_outlet!['geofence_radius_m'] ?? 50)
+                                        ? AppTheme.accentAmber
+                                        : AppTheme.inkMuted,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '${l.distance}: ${_distance!.toStringAsFixed(1)} m',
+                                    style: AppTheme.label(context, color: AppTheme.inkPrimary),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _enRoute,
+                                  icon: const Icon(Icons.directions_car_outlined, size: 16),
+                                  label: Text(l.enRoute),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: _arrived ? null : () => _confirmArrival(),
+                                  icon: const Icon(Icons.pin_drop_outlined, size: 16),
+                                  label: Text(l.confirmArrival),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          if (_arrived) ...[
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.surfaceBright,
+                                  foregroundColor: AppTheme.accentAmber,
+                                  side: const BorderSide(color: AppTheme.accentAmber, width: 1.5),
+                                ),
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => DeliveryFlowScreen(
+                                      stopId: _stopId,
+                                      onLocaleChanged: widget.onLocaleChanged,
+                                    ),
+                                  ),
+                                ),
+                                icon: const Icon(Icons.local_shipping_outlined, color: AppTheme.accentAmber),
+                                label: Text(
+                                  l.openDelivery.toUpperCase(),
+                                  style: AppTheme.headline(
+                                    context,
+                                    size: 13,
+                                    weight: FontWeight.w700,
+                                    color: AppTheme.accentAmber,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  if (_errorKey != null || _errorRaw != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0x22EF4444),
+                        border: Border.all(color: AppTheme.statusRed),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.error_outline, color: AppTheme.statusRed, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _errorText(l),
+                              style: AppTheme.body(context, size: 12, color: AppTheme.statusRed),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-        ],
-      ),
     );
   }
 }

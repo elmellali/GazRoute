@@ -25,6 +25,7 @@ dependencies:
   uuid: ^4.4.0
   crypto: ^3.0.3
   connectivity_plus: ^6.0.0
+  google_fonts: ^8.2.1
 
 dev_dependencies:
   flutter_test:

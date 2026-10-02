@@ -5,6 +5,7 @@ import 'package:gaz_field_agent/l10n/app_localizations.dart';
 
 import '../services/api_client.dart';
 import '../services/geofence_service.dart';
+import '../theme/app_theme.dart';
 import 'route_map_screen.dart';
 
 class ChecklistItem {
@@ -124,7 +125,8 @@ class _VehicleCheckScreenState extends State<VehicleCheckScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${l.shiftStarted}: ${shift['status'] ?? 'ACTIVE'}'),
+          backgroundColor: AppTheme.bgSurface2,
+          content: Text('✓ ${l.shiftStarted}: ${shift['status'] ?? 'ACTIVE'}', style: const TextStyle(color: AppTheme.signalOk)),
         ),
       );
       Navigator.of(context).pushReplacement(
@@ -133,7 +135,6 @@ class _VehicleCheckScreenState extends State<VehicleCheckScreen> {
         ),
       );
     } catch (e) {
-      // If the agent already has an active shift, resume it gracefully
       if (e.toString().contains('already has an active shift')) {
         try {
           final activeShift = await ApiClient.instance.get('/api/v1/shifts/me/active');
@@ -149,7 +150,10 @@ class _VehicleCheckScreenState extends State<VehicleCheckScreen> {
 
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Shift actif repris avec succès')),
+                const SnackBar(
+                  backgroundColor: AppTheme.bgSurface2,
+                  content: Text('✓ Shift actif repris avec succès', style: TextStyle(color: AppTheme.signalOk)),
+                ),
               );
               Navigator.of(context).pushReplacement(
                 MaterialPageRoute(
@@ -169,14 +173,15 @@ class _VehicleCheckScreenState extends State<VehicleCheckScreen> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     _buildItems(l);
+
     return Scaffold(
+      backgroundColor: AppTheme.bgBase,
       appBar: AppBar(
-        title: Text(l.preTripTitle),
+        title: Text(l.preTripTitle, style: AppTheme.headlineFont(context, fontSize: 16)),
         actions: [
           TextButton(
             onPressed: () async {
@@ -185,44 +190,123 @@ class _VehicleCheckScreenState extends State<VehicleCheckScreen> {
                   : const Locale('ar');
               await widget.onLocaleChanged?.call(next);
             },
-            child: Text(l.langToggle),
+            child: Text('🌐 ${l.langToggle}', style: const TextStyle(color: AppTheme.inkPrimary, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppTheme.space16),
         children: [
-          DropdownButtonFormField<String>(
-            initialValue: _vehicleId,
-            decoration: InputDecoration(labelText: l.assignedVehicle),
-            items: _vehicles
-                .map((v) => DropdownMenuItem(
-                      value: v['id'] as String,
-                      child: Text('${v['plate_number']} ${v['model'] ?? ''}'),
-                    ))
-                .toList(),
-            onChanged: (v) => setState(() => _vehicleId = v),
+          // Monolithic Vehicle Selector
+          RawPanel(
+            leftBarColor: AppTheme.accent,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'VÉHICULE & ARMEMENT',
+                      style: TextStyle(color: AppTheme.inkMuted, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.8),
+                    ),
+                    StatusBadge(label: 'ADR SÉCURITÉ', status: BadgeStatus.neutral),
+                  ],
+                ),
+                const SizedBox(height: AppTheme.space12),
+                Text(l.assignedVehicle, style: const TextStyle(color: AppTheme.inkMuted, fontSize: 11, fontWeight: FontWeight.w700)),
+                const SizedBox(height: AppTheme.space4),
+                DropdownButtonFormField<String>(
+                  initialValue: _vehicleId,
+                  dropdownColor: AppTheme.bgSurface2,
+                  style: AppTheme.monoFont(fontSize: 14),
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.local_shipping_outlined, size: 20, color: AppTheme.accent),
+                  ),
+                  items: _vehicles
+                      .map((v) => DropdownMenuItem(
+                            value: v['id'] as String,
+                            child: Text('${v['plate_number']} · ${v['model'] ?? ''}'),
+                          ))
+                      .toList(),
+                  onChanged: (v) => setState(() => _vehicleId = v),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 16),
+
+          // Checklist Header
+          const Padding(
+            padding: EdgeInsets.only(left: 2, bottom: 8, top: 4),
+            child: Text(
+              'CONTRÔLE DE SÉCURITÉ PRÉ-DÉPART (OBLIGATOIRE)',
+              style: TextStyle(color: AppTheme.inkMuted, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.8),
+            ),
+          ),
+
+          // Checklist items with raw cards
           ..._items.map(
-            (item) => CheckboxListTile(
-              value: item.value,
-              title: Text(item.label),
-              onChanged: (v) => setState(() => item.value = v ?? false),
+            (item) => Container(
+              margin: const EdgeInsets.only(bottom: AppTheme.space8),
+              decoration: BoxDecoration(
+                color: item.value ? AppTheme.bgSurface2 : AppTheme.bgSurface1,
+                border: Border.all(
+                  color: item.value ? AppTheme.signalOkBorder : AppTheme.borderRaw,
+                  width: 1,
+                ),
+              ),
+              child: CheckboxListTile(
+                value: item.value,
+                activeColor: AppTheme.signalOk,
+                checkColor: Colors.black,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                title: Text(
+                  item.label,
+                  style: AppTheme.bodyFont(
+                    context,
+                    fontSize: 13,
+                    fontWeight: item.value ? FontWeight.w600 : FontWeight.w400,
+                    color: item.value ? AppTheme.inkPrimary : AppTheme.inkSecondary,
+                  ),
+                ),
+                onChanged: (v) => setState(() => item.value = v ?? false),
+              ),
             ),
           ),
+
           if (_error != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(_error!, style: const TextStyle(color: Colors.red)),
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: AppTheme.space8),
+              padding: const EdgeInsets.all(AppTheme.space12),
+              decoration: BoxDecoration(
+                color: AppTheme.signalDangerBg,
+                border: Border.all(color: AppTheme.signalDangerBorder),
+              ),
+              child: Row(
+                children: [
+                  const Text('🚨 ', style: TextStyle(fontSize: 14)),
+                  Expanded(
+                    child: Text(_error!, style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 12)),
+                  ),
+                ],
+              ),
             ),
-          const SizedBox(height: 8),
+
+          const SizedBox(height: AppTheme.space16),
           FilledButton(
             onPressed: _busy ? null : _accept,
-            child: Text(_busy ? l.starting : l.acceptLoad),
+            child: _busy
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.accentContrast),
+                  )
+                : Text('✓ ${l.acceptLoad}'),
           ),
+          const SizedBox(height: AppTheme.space16),
         ],
       ),
     );
   }
 }
+

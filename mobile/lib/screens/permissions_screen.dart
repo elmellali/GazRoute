@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:gaz_field_agent/l10n/app_localizations.dart';
 
+import '../theme/app_theme.dart';
 import 'vehicle_check_screen.dart';
 
 class PermissionsScreen extends StatefulWidget {
@@ -44,10 +45,16 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text(l.consentTitle),
-          content: Text(l.consentBody),
+          backgroundColor: AppTheme.bgSurface1,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.zero,
+            side: BorderSide(color: AppTheme.borderStrong, width: 1),
+          ),
+          title: Text(l.consentTitle, style: AppTheme.headlineFont(ctx, fontSize: 16)),
+          content: Text(l.consentBody, style: AppTheme.bodyFont(ctx, fontSize: 13, color: AppTheme.inkSecondary)),
           actions: [
-            TextButton(
+            FilledButton(
+              style: FilledButton.styleFrom(minimumSize: const Size(100, 40)),
               onPressed: () => Navigator.pop(ctx),
               child: Text(l.ok),
             ),
@@ -84,8 +91,9 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     return Scaffold(
+      backgroundColor: AppTheme.bgBase,
       appBar: AppBar(
-        title: Text(l.permissions),
+        title: Text(l.permissions, style: AppTheme.headlineFont(context, fontSize: 16)),
         actions: [
           TextButton(
             onPressed: () async {
@@ -94,24 +102,70 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                   : const Locale('ar');
               await widget.onLocaleChanged?.call(next);
             },
-            child: Text(l.langToggle),
+            child: Text('🌐 ${l.langToggle}', style: const TextStyle(color: AppTheme.inkPrimary, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
       body: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(AppTheme.space20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Icon(Icons.location_on_outlined, size: 72),
-            const SizedBox(height: 16),
-            Text(l.permissionsBody, textAlign: TextAlign.center),
-            const SizedBox(height: 24),
-            Text(_statusText(l), textAlign: TextAlign.center),
+            RawPanel(
+              leftBarColor: AppTheme.signalInfo,
+              child: Column(
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: AppTheme.signalInfoBg,
+                      border: Border.all(color: AppTheme.signalInfoBorder),
+                    ),
+                    child: const Center(
+                      child: Icon(Icons.gps_fixed_sharp, size: 28, color: AppTheme.signalInfo),
+                    ),
+                  ),
+                  const SizedBox(height: AppTheme.space16),
+                  Text(
+                    'CONFORMITÉ CNDP & GÉOLOCALISATION',
+                    style: AppTheme.headlineFont(context, fontSize: 15),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: AppTheme.space8),
+                  Text(
+                    l.permissionsBody,
+                    textAlign: TextAlign.center,
+                    style: AppTheme.bodyFont(context, fontSize: 12, color: AppTheme.inkMuted),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppTheme.space12),
+
+            Container(
+              padding: const EdgeInsets.all(AppTheme.space12),
+              decoration: BoxDecoration(
+                color: AppTheme.bgSurface2,
+                border: Border.all(color: AppTheme.borderRaw),
+              ),
+              child: Row(
+                children: [
+                  const Text('ℹ️ ', style: TextStyle(fontSize: 14)),
+                  Expanded(
+                    child: Text(
+                      _statusText(l),
+                      style: AppTheme.bodyFont(context, fontSize: 12, color: AppTheme.inkSecondary),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
             const Spacer(),
             FilledButton(
               onPressed: _requestAll,
-              child: Text(l.grantPermissions),
+              child: Text('✓ ${l.grantPermissions}'),
             ),
           ],
         ),
@@ -119,3 +173,4 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
     );
   }
 }
+

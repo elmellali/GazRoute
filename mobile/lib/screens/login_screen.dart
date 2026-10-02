@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gaz_field_agent/l10n/app_localizations.dart';
 
 import '../services/api_client.dart';
+import '../theme/app_theme.dart';
 import 'permissions_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -101,70 +102,139 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     return Scaffold(
+      backgroundColor: AppTheme.bgBase,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Align(
-                alignment: AlignmentDirectional.topEnd,
-                child: TextButton(
-                  onPressed: _toggleLocale,
-                  child: Text(l.langToggle),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                l.appTitle,
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppTheme.space24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  alignment: AlignmentDirectional.topEnd,
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(80, 36),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
                     ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                l.appSubtitle,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 32),
-              TextField(
-                controller: _phone,
-                keyboardType: TextInputType.phone,
-                decoration: InputDecoration(labelText: l.phone),
-              ),
-              if (_codeSent) ...[
-                const SizedBox(height: 12),
-                if (_devCode != null)
-                  Text('${l.devCode}: $_devCode',
-                      style: const TextStyle(color: Colors.orange)),
-                TextField(
-                  controller: _otp,
-                  keyboardType: TextInputType.number,
-                  maxLength: 6,
-                  decoration: InputDecoration(labelText: l.otpCode),
+                    onPressed: _toggleLocale,
+                    child: Text('🌐 ${l.langToggle}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+                const SizedBox(height: AppTheme.space24),
+
+                // Monolithic Authentication Terminal Card
+                RawPanel(
+                  leftBarColor: AppTheme.accent,
+                  padding: const EdgeInsets.all(AppTheme.space24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppTheme.accentGlow,
+                              border: Border.all(color: AppTheme.accent),
+                            ),
+                            child: const Text('PORTAIL CHAUFFEUR', style: TextStyle(color: AppTheme.accent, fontSize: 10, fontWeight: FontWeight.w700)),
+                          ),
+                          const StatusBadge(label: 'OFFLINE READY', status: BadgeStatus.neutral),
+                        ],
+                      ),
+                      const SizedBox(height: AppTheme.space16),
+
+                      Text(
+                        l.appTitle,
+                        style: AppTheme.headlineFont(context, fontSize: 22),
+                      ),
+                      const SizedBox(height: AppTheme.space4),
+                      Text(
+                        l.appSubtitle,
+                        style: AppTheme.bodyFont(context, fontSize: 12, color: AppTheme.inkMuted),
+                      ),
+                      const SizedBox(height: AppTheme.space24),
+
+                      const Text('NUMÉRO DE TÉLÉPHONE (COMPTE AGENT)', style: TextStyle(color: AppTheme.inkMuted, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+                      const SizedBox(height: AppTheme.space4),
+                      TextField(
+                        controller: _phone,
+                        keyboardType: TextInputType.phone,
+                        style: AppTheme.monoFont(fontSize: 14),
+                        decoration: const InputDecoration(
+                          hintText: '+212600000000',
+                          prefixIcon: Icon(Icons.phone_outlined, size: 18, color: AppTheme.inkMuted),
+                        ),
+                      ),
+
+                      if (_codeSent) ...[
+                        const SizedBox(height: AppTheme.space16),
+                        if (_devCode != null)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: AppTheme.space8),
+                            padding: const EdgeInsets.all(AppTheme.space8),
+                            decoration: BoxDecoration(
+                              color: AppTheme.bgSurface2,
+                              border: Border.all(color: AppTheme.borderRaw),
+                            ),
+                            child: Row(
+                              children: [
+                                const Text('⚡ ', style: TextStyle(fontSize: 14)),
+                                Text('${l.devCode}: ', style: const TextStyle(color: AppTheme.inkMuted, fontSize: 11)),
+                                Text(_devCode!, style: AppTheme.monoFont(color: AppTheme.accent, fontSize: 14)),
+                              ],
+                            ),
+                          ),
+                        const Text('CODE OTP REÇU', style: TextStyle(color: AppTheme.inkMuted, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+                        const SizedBox(height: AppTheme.space4),
+                        TextField(
+                          controller: _otp,
+                          keyboardType: TextInputType.number,
+                          maxLength: 6,
+                          textAlign: TextAlign.center,
+                          style: AppTheme.monoFont(fontSize: 22, color: AppTheme.accent),
+                          decoration: const InputDecoration(
+                            hintText: '000000',
+                            counterText: '',
+                          ),
+                        ),
+                      ],
+
+                      if (_error != null) ...[
+                        const SizedBox(height: AppTheme.space12),
+                        Container(
+                          padding: const EdgeInsets.all(AppTheme.space8),
+                          decoration: BoxDecoration(
+                            color: AppTheme.signalDangerBg,
+                            border: Border.all(color: AppTheme.signalDangerBorder),
+                          ),
+                          child: Text(_error!, style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 12)),
+                        ),
+                      ],
+
+                      const SizedBox(height: AppTheme.space20),
+                      FilledButton(
+                        onPressed: _busy ? null : (_codeSent ? _verify : _requestOtp),
+                        child: _busy
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.accentContrast),
+                              )
+                            : Text(_codeSent ? '✓ ${l.verify}' : '→ ${l.requestOtp}'),
+                      ),
+                    ],
+                  ),
                 ),
               ],
-              if (_error != null) ...[
-                const SizedBox(height: 8),
-                Text(_error!, style: const TextStyle(color: Colors.red)),
-              ],
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: _busy ? null : (_codeSent ? _verify : _requestOtp),
-                child: _busy
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(_codeSent ? l.verify : l.requestOtp),
-              ),
-              const Spacer(),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 }
+
