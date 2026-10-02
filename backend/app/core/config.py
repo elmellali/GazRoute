@@ -23,6 +23,28 @@ class Settings(BaseSettings):
     credit_aging_days_hard_lock: int = 14
     presigned_ttl_minutes: int = 15
 
+    # SMS Gateway Provider Settings
+    sms_provider: str = "stub"  # stub, twilio, infobip, orange, custom
+    sms_sender_name: str = "GazRoute"
+
+    # Twilio
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_from_number: str = ""
+
+    # Infobip
+    infobip_api_key: str = ""
+    infobip_base_url: str = ""
+
+    # Orange SMS API
+    orange_client_id: str = ""
+    orange_client_secret: str = ""
+    orange_sender_address: str = ""
+
+    # Custom HTTP Webhook / Telco API
+    custom_sms_url: str = ""
+    custom_sms_bearer_token: str = ""
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

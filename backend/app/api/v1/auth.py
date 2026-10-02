@@ -59,10 +59,13 @@ def otp_request(body: OtpRequestIn, db: DbDep) -> OtpRequestOut:
     db.add(otp)
     db.commit()
 
-    # SMS stub: log to console / surface in dev response
-    print(f"[SMS STUB] OTP for {phone}: {code}")
+    from app.services.sms import SmsGatewayService
+
+    # Dispatch real SMS via configured provider (Twilio, Infobip, Orange, Custom, or Dev Stub)
+    SmsGatewayService.send_otp(phone, code)
+
     return OtpRequestOut(
-        message="OTP dispatched",
+        message="OTP dispatched via SMS",
         expires_in_seconds=settings.otp_ttl_seconds,
         dev_code=code if settings.env == "dev" else None,
     )
