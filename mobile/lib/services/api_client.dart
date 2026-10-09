@@ -9,7 +9,7 @@ class ApiClient {
   ApiClient._();
   static final ApiClient instance = ApiClient._();
 
-  static const String defaultBaseUrl = 'http://10.0.2.2:8000';
+  static const String defaultBaseUrl = 'https://gazroute-backend.onrender.com';
 
   Future<String> get baseUrl async {
     final prefs = await SharedPreferences.getInstance();

@@ -16,7 +16,7 @@ class SyncService {
   Timer? _timer;
   bool _running = false;
 
-  static const String defaultBaseUrl = 'http://10.0.2.2:8000';
+  static const String defaultBaseUrl = 'https://gazroute-backend.onrender.com';
 
   void start() {
     _timer?.cancel();
