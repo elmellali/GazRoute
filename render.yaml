@@ -1,16 +1,16 @@
-services:
-  # Base de données PostgreSQL gérée par Render
-  - type: psql
-    name: gazroute-db
-    plan: free # ou starter selon vos besoins
+databases:
+  - name: gazroute-db
+    databaseName: gazroute
+    user: gazuser
+    plan: free
     region: frankfurt
 
-  # Le backend FastAPI
+services:
   - type: web
     name: gazroute-backend
     env: python
     rootDir: backend
-    plan: free # ou starter
+    plan: free
     region: frankfurt
     buildCommand: "pip install -e . && alembic upgrade head"
     startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
@@ -22,6 +22,6 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: CORS_ORIGINS
-        value: "https://votre-domaine-vercel.vercel.app" # À remplacer par le lien Vercel après le déploiement
+        value: "https://votre-domaine-vercel.vercel.app"
       - key: ENV
         value: "prod"
