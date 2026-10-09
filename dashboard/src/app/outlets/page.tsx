@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { api } from "@/lib/api";
 import { useI18n } from "@/components/LanguageProvider";
+import ForbiddenError from "@/components/ForbiddenError";
 
 const OutletMap = dynamic(() => import("@/components/OutletMap"), { ssr: false });
+const LocationPickerMap = dynamic(() => import("@/components/LocationPickerMap"), { ssr: false });
 
 import type { Outlet } from "@/components/types";
 
@@ -31,6 +33,19 @@ export default function OutletsPage() {
   const [creditLimit, setCreditLimit] = useState(5000);
   const [paymentTerms, setPaymentTerms] = useState(15);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Edit Modal State
+  const [showEdit, setShowEdit] = useState(false);
+  const [editId, setEditId] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editContactName, setEditContactName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editLatitude, setEditLatitude] = useState("33.5731");
+  const [editLongitude, setEditLongitude] = useState("-7.5898");
+  const [editGeofenceRadius, setEditGeofenceRadius] = useState(60);
+  const [editCreditLimit, setEditCreditLimit] = useState(5000);
+  const [editPaymentTerms, setEditPaymentTerms] = useState(15);
+  const [editIsActive, setEditIsActive] = useState(true);
 
   async function loadOutlets() {
     try {
@@ -110,6 +125,70 @@ export default function OutletsPage() {
     }
   }
 
+  function openEditOutlet(o: Outlet) {
+    setEditId(o.id);
+    setEditName(o.name);
+    setEditContactName(o.contact_name || "");
+    setEditPhone(o.phone);
+    setEditLatitude(o.latitude !== null && o.latitude !== undefined ? String(o.latitude) : "33.5731");
+    setEditLongitude(o.longitude !== null && o.longitude !== undefined ? String(o.longitude) : "-7.5898");
+    setEditGeofenceRadius(o.geofence_radius_m || 60);
+    setEditCreditLimit(o.credit_limit_mad || 0);
+    setEditPaymentTerms(o.payment_terms_days || 0);
+    setEditIsActive(o.is_active);
+    setShowEdit(true);
+  }
+
+  async function handleUpdateOutlet(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    setIsSubmitting(true);
+
+    try {
+      await api(`/api/v1/outlets/${editId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: editName.trim(),
+          contact_name: editContactName.trim() || undefined,
+          phone: editPhone.trim(),
+          latitude: parseFloat(editLatitude),
+          longitude: parseFloat(editLongitude),
+          geofence_radius_m: Number(editGeofenceRadius),
+          credit_limit_mad: Number(editCreditLimit),
+          payment_terms_days: Number(editPaymentTerms),
+          is_active: editIsActive,
+        }),
+      });
+
+      setSuccess(`Point de vente « ${editName} » mis à jour !`);
+      setShowEdit(false);
+      await loadOutlets();
+      if (sel?.id === editId) {
+        const updated = outlets.find((x) => x.id === editId);
+        if (updated) setSel({ ...updated, name: editName, phone: editPhone, contact_name: editContactName });
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleDeleteOutlet(o: Outlet) {
+    if (!confirm(`Confirmer la suppression du point de vente « ${o.name} » ?`)) return;
+    setError("");
+    setSuccess("");
+    try {
+      await api(`/api/v1/outlets/${o.id}`, { method: "DELETE" });
+      setSuccess(`Point de vente « ${o.name} » supprimé.`);
+      if (sel?.id === o.id) setSel(null);
+      await loadOutlets();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   const filteredOutlets = outlets.filter((o) => {
     if (!search.trim()) return true;
     const s = search.toLowerCase();
@@ -119,6 +198,10 @@ export default function OutletsPage() {
       (o.contact_name && o.contact_name.toLowerCase().includes(s))
     );
   });
+
+  if (error && error.toLowerCase().includes("not permitted")) {
+    return <ForbiddenError error={error} />;
+  }
 
   return (
     <>
@@ -212,6 +295,25 @@ export default function OutletsPage() {
 
           <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "var(--space-12)", marginTop: "var(--space-16)" }}>
             <small className="muted">ID Unique: <code className="mono">{sel?.id ? sel.id.slice(0, 12) : "—"}</code></small>
+            {sel && (
+              <div style={{ display: "flex", gap: "var(--space-8)", marginTop: "var(--space-12)" }}>
+                <button
+                  type="button"
+                  className="btn secondary sm"
+                  style={{ flex: 1 }}
+                  onClick={() => openEditOutlet(sel)}
+                >
+                  ✏️ Modifier la fiche
+                </button>
+                <button
+                  type="button"
+                  className="btn danger sm"
+                  onClick={() => handleDeleteOutlet(sel)}
+                >
+                  🗑️ Supprimer
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -264,30 +366,38 @@ export default function OutletsPage() {
                   />
                 </div>
 
-                <div>
-                  <label className="form-label">Latitude GPS *</label>
-                  <input
-                    type="number"
-                    step="any"
-                    className="input"
-                    placeholder="33.5731"
-                    value={latitude}
-                    onChange={(e) => setLatitude(e.target.value)}
-                    required
+                <div style={{ gridColumn: "span 2" }}>
+                  <label className="form-label">Localisation GPS (Cliquer sur la carte pour choisir) *</label>
+                  <LocationPickerMap
+                    latitude={parseFloat(latitude) || 33.5731}
+                    longitude={parseFloat(longitude) || -7.5898}
+                    onLocationChange={(lat, lng) => {
+                      setLatitude(lat.toFixed(6));
+                      setLongitude(lng.toFixed(6));
+                    }}
                   />
-                </div>
-
-                <div>
-                  <label className="form-label">Longitude GPS *</label>
-                  <input
-                    type="number"
-                    step="any"
-                    className="input"
-                    placeholder="-7.5898"
-                    value={longitude}
-                    onChange={(e) => setLongitude(e.target.value)}
-                    required
-                  />
+                  <div style={{ display: "flex", gap: "var(--space-8)", marginTop: "var(--space-8)" }}>
+                    <input
+                      type="number"
+                      step="any"
+                      className="input"
+                      placeholder="Latitude"
+                      value={latitude}
+                      onChange={(e) => setLatitude(e.target.value)}
+                      required
+                      style={{ flex: 1 }}
+                    />
+                    <input
+                      type="number"
+                      step="any"
+                      className="input"
+                      placeholder="Longitude"
+                      value={longitude}
+                      onChange={(e) => setLongitude(e.target.value)}
+                      required
+                      style={{ flex: 1 }}
+                    />
+                  </div>
                 </div>
 
                 <div style={{ gridColumn: "span 2", display: "flex", gap: "var(--space-8)" }}>
@@ -363,6 +473,148 @@ export default function OutletsPage() {
         </div>
       )}
 
+      {/* Modal Modification Point de Vente */}
+      {showEdit && (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal-content">
+            <div className="panel-header">
+              <h2 className="panel-title">
+                <span>✏️</span> Modifier le Point de Vente
+              </h2>
+              <button type="button" className="btn secondary sm" onClick={() => setShowEdit(false)}>✕</button>
+            </div>
+
+            <form onSubmit={handleUpdateOutlet}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-12)" }}>
+                <div style={{ gridColumn: "span 2" }}>
+                  <label className="form-label">Nom de l'enseigne *</label>
+                  <input
+                    type="text"
+                    className="input"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="form-label">Contact / Gérant</label>
+                  <input
+                    type="text"
+                    className="input"
+                    value={editContactName}
+                    onChange={(e) => setEditContactName(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="form-label">Téléphone *</label>
+                  <input
+                    type="text"
+                    className="input"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div style={{ gridColumn: "span 2" }}>
+                  <label className="form-label">Position GPS (Cliquer sur la carte pour déplacer)</label>
+                  <div style={{ height: 260, marginBottom: "var(--space-8)", border: "1px solid var(--border-raw)" }}>
+                    <LocationPickerMap
+                      latitude={parseFloat(editLatitude) || 33.5731}
+                      longitude={parseFloat(editLongitude) || -7.5898}
+                      onLocationChange={(lat, lng) => {
+                        setEditLatitude(lat.toFixed(6));
+                        setEditLongitude(lng.toFixed(6));
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: "flex", gap: "var(--space-8)" }}>
+                    <input
+                      type="number"
+                      step="any"
+                      className="input"
+                      placeholder="Latitude"
+                      value={editLatitude}
+                      onChange={(e) => setEditLatitude(e.target.value)}
+                      required
+                      style={{ flex: 1 }}
+                    />
+                    <input
+                      type="number"
+                      step="any"
+                      className="input"
+                      placeholder="Longitude"
+                      value={editLongitude}
+                      onChange={(e) => setEditLongitude(e.target.value)}
+                      required
+                      style={{ flex: 1 }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="form-label">Rayon Géofence (mètres)</label>
+                  <input
+                    type="number"
+                    min={30}
+                    max={200}
+                    className="input"
+                    value={editGeofenceRadius}
+                    onChange={(e) => setEditGeofenceRadius(Number(e.target.value))}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="form-label">Plafond Crédit (MAD)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="input"
+                    value={editCreditLimit}
+                    onChange={(e) => setEditCreditLimit(Number(e.target.value))}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="form-label">Délai Paiement (Jours)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="input"
+                    value={editPaymentTerms}
+                    onChange={(e) => setEditPaymentTerms(Number(e.target.value))}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="form-label">Statut Opérationnel</label>
+                  <select
+                    className="input"
+                    value={editIsActive ? "active" : "inactive"}
+                    onChange={(e) => setEditIsActive(e.target.value === "active")}
+                  >
+                    <option value="active">● Actif</option>
+                    <option value="inactive">▲ Inactif / Suspendu</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--space-12)", marginTop: "var(--space-20)" }}>
+                <button type="button" className="btn secondary" onClick={() => setShowEdit(false)}>Annuler</button>
+                <button type="submit" className="btn" disabled={isSubmitting}>
+                  {isSubmitting ? "Enregistrement..." : "✓ Mettre à jour"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Tableau et Recherche */}
       <div className="panel">
         <div className="panel-header">
@@ -389,7 +641,7 @@ export default function OutletsPage() {
                 <th>{t("geofence")}</th>
                 <th>{t("creditLimit")}</th>
                 <th>Statut</th>
-                <th>Action</th>
+                <th style={{ textAlign: "right" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -405,14 +657,30 @@ export default function OutletsPage() {
                       {o.is_active ? "● Actif" : "▲ Inactif"}
                     </span>
                   </td>
-                  <td>
-                    <button
-                      type="button"
-                      className="btn secondary sm"
-                      onClick={() => openOutlet(o)}
-                    >
-                      {sel?.id === o.id ? "Inspecté" : t("select")}
-                    </button>
+                  <td style={{ textAlign: "right" }}>
+                    <div className="row" style={{ justifyContent: "flex-end" }}>
+                      <button
+                        type="button"
+                        className="btn secondary sm"
+                        onClick={() => openOutlet(o)}
+                      >
+                        {sel?.id === o.id ? "Inspecté" : t("select")}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn secondary sm"
+                        onClick={() => openEditOutlet(o)}
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        type="button"
+                        className="btn danger sm"
+                        onClick={() => handleDeleteOutlet(o)}
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

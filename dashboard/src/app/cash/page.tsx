@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useI18n } from "@/components/LanguageProvider";
+import ForbiddenError from "@/components/ForbiddenError";
 
 type Handover = {
   id: string;
@@ -22,7 +23,26 @@ export default function CashPage() {
   const [verifyId, setVerifyId] = useState<string | null>(null);
   const [verified, setVerified] = useState("");
   const [reason, setReason] = useState("");
+  const [filterStatus, setFilterStatus] = useState<string>("ALL");
   const { t, te } = useI18n();
+
+  function exportCsv() {
+    if (filteredRows.length === 0) return;
+    const headers = ["id", "shift_id", "expected_cash_mad", "declared_cash_mad", "verified_cash_mad", "variance_mad", "status", "variance_reason"];
+    const lines = filteredRows.map((r) =>
+      headers.map((h) => JSON.stringify((r as unknown as Record<string, unknown>)[h] ?? "")).join(",")
+    );
+    const csv = [headers.join(","), ...lines].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "journal_caisse_remises.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  }
 
   async function load() {
     try {
@@ -63,6 +83,17 @@ export default function CashPage() {
   const totalVerified = rows
     .filter((r) => r.verified_cash_mad !== null)
     .reduce((sum, r) => sum + (r.verified_cash_mad || 0), 0);
+
+  const filteredRows = rows.filter((r) => {
+    if (filterStatus === "PENDING") return r.status !== "VERIFIED";
+    if (filterStatus === "VARIANCE") return r.status === "VARIANCE_FLAGGED" || (r.variance_mad !== null && r.variance_mad !== 0);
+    if (filterStatus === "VERIFIED") return r.status === "VERIFIED";
+    return true;
+  });
+
+  if (error && error.toLowerCase().includes("not permitted")) {
+    return <ForbiddenError error={error} />;
+  }
 
   return (
     <>
@@ -166,10 +197,49 @@ export default function CashPage() {
 
       {/* Main Ledger Table */}
       <div className="panel">
-        <div className="panel-header">
-          <h2 className="panel-title">
-            <span>📋</span> Registre des Remises d'Espèces par Shift ({rows.length})
-          </h2>
+        <div className="panel-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "var(--space-8)" }}>
+          <div className="row">
+            <h2 className="panel-title">
+              <span>📋</span> Registre des Remises d'Espèces par Shift ({filteredRows.length})
+            </h2>
+            <div className="row" style={{ marginLeft: "var(--space-12)" }}>
+              <button
+                type="button"
+                className={`btn ${filterStatus === "ALL" ? "" : "secondary"} sm`}
+                onClick={() => setFilterStatus("ALL")}
+              >
+                Tous ({rows.length})
+              </button>
+              <button
+                type="button"
+                className={`btn ${filterStatus === "PENDING" ? "" : "secondary"} sm`}
+                onClick={() => setFilterStatus("PENDING")}
+              >
+                À Vérifier ({rows.filter((r) => r.status !== "VERIFIED").length})
+              </button>
+              <button
+                type="button"
+                className={`btn ${filterStatus === "VARIANCE" ? "" : "secondary"} sm`}
+                onClick={() => setFilterStatus("VARIANCE")}
+              >
+                Écarts ({flaggedHandovers.length})
+              </button>
+              <button
+                type="button"
+                className={`btn ${filterStatus === "VERIFIED" ? "" : "secondary"} sm`}
+                onClick={() => setFilterStatus("VERIFIED")}
+              >
+                Clôturés ({rows.filter((r) => r.status === "VERIFIED").length})
+              </button>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn secondary sm"
+            onClick={exportCsv}
+          >
+            📥 Exporter CSV
+          </button>
         </div>
 
         <div className="table-wrap">
@@ -186,7 +256,7 @@ export default function CashPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((h) => {
+              {filteredRows.map((h) => {
                 const hasVariance = h.variance_mad !== null && h.variance_mad !== 0;
                 return (
                   <tr key={h.id}>

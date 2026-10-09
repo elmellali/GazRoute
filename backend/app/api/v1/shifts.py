@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.deps import (
     ROLE_AGENT,
+    ROLE_DISPATCHER,
     ROLE_OWNER,
     ROLE_WAREHOUSE,
     AuthDep,
@@ -24,11 +25,13 @@ from app.models import (
     ShiftTelemetry,
     Vehicle,
 )
+from app.repositories.base import get_tenant_scoped
 from app.schemas import (
     AcceptLoadIn,
     CloseoutIn,
     LoadSheetCreate,
     LoadSheetOut,
+    ShiftCreateIn,
     ShiftOut,
     ShiftStartIn,
     TelemetryIn,
@@ -115,6 +118,89 @@ def list_shifts(ctx: AuthDep, db: DbDep, status: str | None = None, limit: int =
         stmt = stmt.where(DriverShift.status == status)
     shifts = db.execute(stmt.order_by(DriverShift.started_at.desc()).limit(limit)).scalars().all()
     return [ShiftOut.model_validate(s) for s in shifts]
+
+
+@router.post("", response_model=ShiftOut, status_code=201)
+def create_shift_dispatcher(
+    body: ShiftCreateIn,
+    ctx: AuthDep,
+    db: DbDep,
+    _guard=Depends(require_roles(ROLE_OWNER, ROLE_DISPATCHER)),
+):
+    existing = db.execute(
+        select(DriverShift).where(
+            DriverShift.tenant_id == ctx.tenant_id,
+            DriverShift.agent_id == body.agent_id,
+            DriverShift.status == "ACTIVE",
+        )
+    ).scalar_one_or_none()
+    if existing:
+        raise Conflict("Cet agent a déjà un shift actif en cours")
+
+    vehicle = db.execute(
+        select(Vehicle).where(
+            Vehicle.tenant_id == ctx.tenant_id, Vehicle.id == body.vehicle_id
+        )
+    ).scalar_one_or_none()
+    if vehicle is None:
+        raise NotFound("Véhicule non trouvé")
+
+    depot_id = body.depot_location_id
+    if depot_id is None:
+        depot = db.execute(
+            select(InventoryLocation).where(
+                InventoryLocation.tenant_id == ctx.tenant_id,
+                InventoryLocation.type == "depot",
+            )
+        ).scalars().first()
+        depot_id = depot.id if depot else None
+
+    shift = DriverShift(
+        tenant_id=ctx.tenant_id,
+        agent_id=body.agent_id,
+        vehicle_id=body.vehicle_id,
+        depot_location_id=depot_id,
+        status="ACTIVE",
+        pre_trip_safety_passed=True,
+        pre_trip_payload={"dispatcher_created": True, "created_by": str(ctx.user_id)},
+        odometer_km=body.odometer_km,
+        started_at=datetime.now(timezone.utc),
+    )
+    db.add(shift)
+    db.flush()
+    write_audit(
+        db,
+        tenant_id=ctx.tenant_id,
+        actor_id=ctx.user_id,
+        action="shift.start_by_dispatcher",
+        target_entity="driver_shifts",
+        target_id=shift.id,
+        after_state={"vehicle_id": str(body.vehicle_id), "agent_id": str(body.agent_id)},
+    )
+    db.commit()
+    return ShiftOut.model_validate(shift)
+
+
+@router.post("/{shift_id}/close", response_model=ShiftOut)
+def close_shift_dispatcher(
+    shift_id: UUID,
+    ctx: AuthDep,
+    db: DbDep,
+    _guard=Depends(require_roles(ROLE_OWNER, ROLE_DISPATCHER)),
+):
+    s = get_tenant_scoped(db, DriverShift, ctx.tenant_id, shift_id, "Shift non trouvé")
+    s.status = "CLOSED"
+    s.ended_at = datetime.now(timezone.utc)
+    write_audit(
+        db,
+        tenant_id=ctx.tenant_id,
+        actor_id=ctx.user_id,
+        action="shift.close_by_dispatcher",
+        target_entity="driver_shifts",
+        target_id=s.id,
+    )
+    db.commit()
+    return ShiftOut.model_validate(s)
 
 
 @router.get("/me/active", response_model=ShiftOut | None)

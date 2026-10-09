@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useI18n } from "@/components/LanguageProvider";
+import dynamic from "next/dynamic";
+import ForbiddenError from "@/components/ForbiddenError";
+
+const LocationPickerMap = dynamic(() => import("@/components/LocationPickerMap"), { ssr: false });
 
 type Incident = {
   id: string;
@@ -122,6 +126,9 @@ export default function SafetyPage() {
 
   const openIncidents = rows.filter((r) => !r.is_resolved);
   const criticalIncidents = rows.filter((r) => !r.is_resolved && r.severity === "CRITICAL");
+  if (error && error.toLowerCase().includes("not permitted")) {
+    return <ForbiddenError error={error} />;
+  }
 
   return (
     <>
@@ -265,26 +272,36 @@ export default function SafetyPage() {
                   </select>
                 </div>
 
-                <div>
-                  <label className="form-label">Latitude GPS</label>
-                  <input
-                    type="number"
-                    step="any"
-                    className="input"
-                    value={latitude}
-                    onChange={(e) => setLatitude(e.target.value)}
+                <div style={{ gridColumn: "span 2" }}>
+                  <label className="form-label">Localisation GPS (Cliquer sur la carte pour choisir)</label>
+                  <LocationPickerMap
+                    latitude={parseFloat(latitude) || 33.5731}
+                    longitude={parseFloat(longitude) || -7.5898}
+                    onLocationChange={(lat, lng) => {
+                      setLatitude(lat.toFixed(6));
+                      setLongitude(lng.toFixed(6));
+                    }}
                   />
-                </div>
-
-                <div>
-                  <label className="form-label">Longitude GPS</label>
-                  <input
-                    type="number"
-                    step="any"
-                    className="input"
-                    value={longitude}
-                    onChange={(e) => setLongitude(e.target.value)}
-                  />
+                  <div style={{ display: "flex", gap: "var(--space-8)", marginTop: "var(--space-8)" }}>
+                    <input
+                      type="number"
+                      step="any"
+                      className="input"
+                      placeholder="Latitude"
+                      value={latitude}
+                      onChange={(e) => setLatitude(e.target.value)}
+                      style={{ flex: 1 }}
+                    />
+                    <input
+                      type="number"
+                      step="any"
+                      className="input"
+                      placeholder="Longitude"
+                      value={longitude}
+                      onChange={(e) => setLongitude(e.target.value)}
+                      style={{ flex: 1 }}
+                    />
+                  </div>
                 </div>
 
                 <div style={{ gridColumn: "span 2" }}>

@@ -273,6 +273,56 @@ def add_stop_to_route(
     return _route_out(db, route)
 
 
+@router.delete("/{route_id}", status_code=204)
+def delete_route(
+    route_id: UUID,
+    ctx: AuthDep,
+    db: DbDep,
+    _guard=Depends(require_roles(ROLE_DISPATCHER, ROLE_OWNER)),
+):
+    route = _get_route(db, ctx.tenant_id, route_id)
+    if route.status not in ("DRAFT", "CANCELLED"):
+        raise Conflict("Only DRAFT routes can be deleted")
+    stops = db.execute(
+        select(RouteStop).where(RouteStop.route_id == route.id)
+    ).scalars().all()
+    for s in stops:
+        db.delete(s)
+    db.delete(route)
+    db.commit()
+    return None
+
+
+@router.delete("/{route_id}/stops/{stop_id}", response_model=RouteOut)
+def remove_stop_from_route(
+    route_id: UUID,
+    stop_id: UUID,
+    ctx: AuthDep,
+    db: DbDep,
+    _guard=Depends(require_roles(ROLE_DISPATCHER, ROLE_OWNER)),
+):
+    route = _get_route(db, ctx.tenant_id, route_id)
+    if route.status != "DRAFT":
+        raise Conflict("Stops can only be removed from DRAFT routes")
+    stop = _get_stop(db, ctx.tenant_id, stop_id)
+    if stop.route_id != route.id:
+        raise NotFound("Stop does not belong to this route")
+    db.delete(stop)
+    db.flush()
+    remaining = db.execute(
+        select(RouteStop)
+        .where(RouteStop.route_id == route.id)
+        .order_by(RouteStop.sequence_order)
+    ).scalars().all()
+    for idx, s in enumerate(remaining):
+        s.sequence_order = -(idx + 1)
+    db.flush()
+    for idx, s in enumerate(remaining):
+        s.sequence_order = idx + 1
+    db.commit()
+    return _route_out(db, route)
+
+
 
 
 @router.get("/stops/{stop_id}", response_model=RouteStopOut)

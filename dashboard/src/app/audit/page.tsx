@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { api, getTokens } from "@/lib/api";
 import { useI18n } from "@/components/LanguageProvider";
+import Link from "next/link";
+import ForbiddenError from "@/components/ForbiddenError";
 
 type Note = {
   id: string;
@@ -51,7 +53,53 @@ export default function AuditPage() {
       .catch((e) => setError(e.message));
   }, []);
 
+  async function downloadDeliveryNotePdf(noteId: string, receiptNumber: string) {
+    try {
+      const tokens = getTokens();
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+      const res = await fetch(`${apiUrl}/api/v1/delivery-notes/${noteId}/pdf`, {
+        headers: {
+          Authorization: `Bearer ${tokens?.access_token || ""}`,
+        },
+      });
+      if (!res.ok) throw new Error("Erreur lors de la génération du PDF.");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${receiptNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  function exportCsv(data: Record<string, unknown>[], filename: string) {
+    if (data.length === 0) return;
+    const headers = Object.keys(data[0]);
+    const rows = data.map((row) =>
+      headers.map((h) => JSON.stringify(row[h] ?? "")).join(",")
+    );
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${filename}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  }
+
   const totalPaymentsAmount = payments.reduce((sum, p) => sum + p.amount_mad, 0);
+
+  if (error && error.toLowerCase().includes("not permitted")) {
+    return <ForbiddenError error={error} />;
+  }
 
   return (
     <>
@@ -114,10 +162,13 @@ export default function AuditPage() {
       <section className="editorial-grid-split">
         {/* Personnel Habilité */}
         <div className="panel">
-          <div className="panel-header">
+          <div className="panel-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <h2 className="panel-title">
               <span>👤</span> {t("staffAccounts")} ({users.length})
             </h2>
+            <Link href="/users" className="btn secondary sm">
+              Gérer les utilisateurs
+            </Link>
           </div>
           <div className="table-wrap">
             <table>
@@ -147,10 +198,17 @@ export default function AuditPage() {
 
         {/* Bons de Livraison */}
         <div className="panel" style={{ borderLeft: "3px solid var(--accent)" }}>
-          <div className="panel-header">
+          <div className="panel-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <h2 className="panel-title">
-              <span>📜</span> {t("deliveryReceipts")}
+              <span>📜</span> {t("deliveryReceipts")} ({notes.length})
             </h2>
+            <button
+              type="button"
+              className="btn secondary sm"
+              onClick={() => exportCsv(notes as unknown as Record<string, unknown>[], "registre_bons_livraison")}
+            >
+              📥 Exporter CSV
+            </button>
           </div>
           <div className="table-wrap">
             <table>
@@ -160,6 +218,7 @@ export default function AuditPage() {
                   <th>{t("recipient")}</th>
                   <th>{t("totalMad")}</th>
                   <th>{t("when")}</th>
+                  <th style={{ textAlign: "right" }}>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -169,11 +228,21 @@ export default function AuditPage() {
                     <td style={{ fontWeight: 600 }}>{n.recipient_name}</td>
                     <td style={{ fontFamily: "var(--font-mono)", fontWeight: 700 }}>{n.total_amount_mad.toLocaleString("fr-FR")} MAD</td>
                     <td><small className="muted">{n.created_at ? String(n.created_at).slice(0, 10) : "—"}</small></td>
+                    <td style={{ textAlign: "right" }}>
+                      <button
+                        type="button"
+                        className="btn secondary sm"
+                        onClick={() => downloadDeliveryNotePdf(n.id, n.receipt_number)}
+                        title="Télécharger l'e-BL officiel scellé"
+                      >
+                        📄 PDF
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 {notes.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="muted" style={{ textAlign: "center", padding: "var(--space-24)" }}>
+                    <td colSpan={5} className="muted" style={{ textAlign: "center", padding: "var(--space-24)" }}>
                       {t("noDeliveryNotes")}
                     </td>
                   </tr>
@@ -186,11 +255,20 @@ export default function AuditPage() {
 
       {/* Traçabilité Paiements */}
       <div className="panel">
-        <div className="panel-header">
-          <h2 className="panel-title">
-            <span>💳</span> Traçabilité des Règlements ({payments.length})
-          </h2>
-          <span className="badge neutral">RAPPROCHEMENT AUTOMATIQUE</span>
+        <div className="panel-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="row">
+            <h2 className="panel-title">
+              <span>💳</span> Traçabilité des Règlements ({payments.length})
+            </h2>
+            <span className="badge neutral">RAPPROCHEMENT AUTOMATIQUE</span>
+          </div>
+          <button
+            type="button"
+            className="btn secondary sm"
+            onClick={() => exportCsv(payments as unknown as Record<string, unknown>[], "journal_reglements_especes")}
+          >
+            📥 Exporter CSV
+          </button>
         </div>
         <div className="table-wrap">
           <table>

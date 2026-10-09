@@ -76,6 +76,14 @@ class UserCreate(BaseModel):
     preferred_lang: str = "fr"
     password: str | None = None
 
+class UserUpdate(BaseModel):
+    phone: str | None = None
+    full_name: str | None = None
+    role: str | None = None
+    preferred_lang: str | None = None
+    is_active: bool | None = None
+    password: str | None = None
+
 
 class UserOut(ORMModel):
     id: UUID4
@@ -95,6 +103,14 @@ class CylinderTypeCreate(BaseModel):
     base_sale_price_mad: float
 
 
+class CylinderTypeUpdate(BaseModel):
+    gas_type: str | None = None
+    size_kg: float | None = None
+    deposit_amount_mad: float | None = None
+    base_sale_price_mad: float | None = None
+    is_active: bool | None = None
+
+
 class CylinderTypeOut(ORMModel):
     id: UUID4
     tenant_id: UUID4
@@ -109,6 +125,13 @@ class VehicleCreate(BaseModel):
     plate_number: str
     model: str | None = None
     max_payload_kg: float | None = None
+
+
+class VehicleUpdate(BaseModel):
+    plate_number: str | None = None
+    model: str | None = None
+    max_payload_kg: float | None = None
+    is_active: bool | None = None
 
 
 class VehicleOut(ORMModel):
@@ -177,6 +200,13 @@ class PreTripSafety(BaseModel):
     cargo_straps_secured: bool
     stacking_compliant: bool
     no_gas_leaks: bool
+
+
+class ShiftCreateIn(BaseModel):
+    agent_id: UUID4
+    vehicle_id: UUID4
+    depot_location_id: UUID4 | None = None
+    odometer_km: float = 0.0
 
 
 class ShiftStartIn(BaseModel):

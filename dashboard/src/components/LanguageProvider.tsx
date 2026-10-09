@@ -25,6 +25,7 @@ type Ctx = {
   t: (key: string) => string;
   te: (value: string | null | undefined) => string;
   dir: "ltr" | "rtl";
+  isAr: boolean;
 };
 
 const LanguageContext = createContext<Ctx | null>(null);
@@ -77,6 +78,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       t: (key: string) => translate(locale, key),
       te: (v: string | null | undefined) => translateEnum(locale, v),
       dir: dirFor(locale),
+      isAr: locale === "ar",
     }),
     [locale, setLocale]
   );
@@ -94,6 +96,7 @@ export function useI18n(): Ctx {
       t: (key: string) => translate(locale, key),
       te: (v: string | null | undefined) => translateEnum(locale, v),
       dir: dirFor(locale),
+      isAr: locale === "ar",
     };
   }
   return ctx;

@@ -791,3 +791,68 @@ label.form-label {
   border-top: 3px solid var(--accent);
   padding: var(--space-32);
 }
+/* ==========================================================================
+   MODAL COMPONENT (Glassmorphic & Structured)
+   ========================================================================== */
+
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(8, 12, 18, 0.85); /* var(--bg-base) with opacity */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-card {
+  background: var(--bg-surface-1);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--border-raw);
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.modal-header {
+  padding: var(--space-16) var(--space-20);
+  border-bottom: 1px solid var(--border-raw);
+  background: var(--bg-surface-2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-body {
+  padding: var(--space-20);
+  overflow-y: auto;
+}
+
+.modal-footer {
+  padding: var(--space-16) var(--space-20);
+  border-top: 1px solid var(--border-raw);
+  background: var(--bg-surface-2);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-12);
+}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useI18n } from "@/components/LanguageProvider";
+import ForbiddenError from "@/components/ForbiddenError";
 
 type Stop = {
   id: string;
@@ -84,6 +85,28 @@ export default function RoutesPage() {
       const updated = await api<Route>(`/api/v1/routes/${id}/optimize`, { method: "POST" });
       setSelected(updated);
       setRoutes((prev) => prev.map((r) => (r.id === id ? updated : r)));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function deleteRoute(id: string) {
+    if (!confirm("Confirmer la suppression / annulation de cette tournée ?")) return;
+    try {
+      await api(`/api/v1/routes/${id}`, { method: "DELETE" });
+      if (selected?.id === id) setSelected(null);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function removeStop(routeId: string, stopId: string) {
+    if (!confirm("Retirer cet arrêt de la tournée ?")) return;
+    try {
+      const updated = await api<Route>(`/api/v1/routes/${routeId}/stops/${stopId}`, { method: "DELETE" });
+      setSelected(updated);
+      setRoutes((prev) => prev.map((r) => (r.id === routeId ? updated : r)));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -172,6 +195,9 @@ export default function RoutesPage() {
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
   }
+  if (error && error.toLowerCase().includes("not permitted")) {
+    return <ForbiddenError error={error} />;
+  }
 
   return (
     <>
@@ -204,7 +230,16 @@ export default function RoutesPage() {
             <form onSubmit={handleCreateRoute}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-12)" }}>
                 <div>
-                  <label className="form-label">Shift Chauffeur Actif *</label>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-4)" }}>
+                    <label className="form-label" style={{ margin: 0 }}>Shift Chauffeur Actif *</label>
+                    <a
+                      href="/dispatch"
+                      className="btn secondary sm"
+                      style={{ padding: "1px 6px", fontSize: "0.72rem", textDecoration: "none" }}
+                    >
+                      ＋ Démarrer un Shift
+                    </a>
+                  </div>
                   <select
                     className="input"
                     value={newShiftId}
@@ -349,13 +384,23 @@ export default function RoutesPage() {
                           {selected?.id === r.id ? "Actif" : t("open")}
                         </button>
                         {r.status === "DRAFT" && (
-                          <button
-                            type="button"
-                            className="btn sm"
-                            onClick={() => publish(r.id)}
-                          >
-                            {t("publish")}
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              className="btn sm"
+                              onClick={() => publish(r.id)}
+                            >
+                              {t("publish")}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn danger sm"
+                              onClick={() => deleteRoute(r.id)}
+                              title="Supprimer la tournée"
+                            >
+                              🗑️
+                            </button>
+                          </>
                         )}
                       </div>
                     </td>
@@ -457,6 +502,14 @@ export default function RoutesPage() {
                                   </button>
                                   <button type="button" className="btn secondary sm" onClick={() => move(selected, s.id, 1)}>
                                     ↓
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn danger sm"
+                                    onClick={() => removeStop(selected.id, s.id)}
+                                    title="Retirer cet arrêt"
+                                  >
+                                    ✕
                                   </button>
                                 </>
                               )}

@@ -15,11 +15,12 @@ from app.core.deps import (
     require_roles,
 )
 from app.core.exceptions import Forbidden, NotFound, ValidationException
-from app.models import CylinderType, Outlet, Tenant, User, Vehicle
+from app.models import CylinderType, InventoryLocation, Outlet, Tenant, User, Vehicle
 from app.repositories.base import get_tenant_scoped, list_tenant
 from app.schemas import (
     CylinderTypeCreate,
     CylinderTypeOut,
+    CylinderTypeUpdate,
     OutletCreate,
     OutletOut,
     OutletUpdate,
@@ -27,8 +28,10 @@ from app.schemas import (
     TenantOut,
     UserCreate,
     UserOut,
+    UserUpdate,
     VehicleCreate,
     VehicleOut,
+    VehicleUpdate,
 )
 from app.services.audit import write_audit
 from fastapi import Depends
@@ -68,7 +71,7 @@ def create_user(
     body: UserCreate,
     ctx: AuthDep,
     db: DbDep,
-    _guard=Depends(require_roles(ROLE_OWNER)),
+    _guard=Depends(require_roles(ROLE_OWNER, ROLE_DISPATCHER)),
 ):
     from app.core.security import hash_password
 
@@ -103,6 +106,41 @@ def create_user(
     db.commit()
     return UserOut.model_validate(u)
 
+@router.patch("/users/{user_id}", response_model=UserOut)
+def update_user(
+    user_id: UUID,
+    body: UserUpdate,
+    ctx: AuthDep,
+    db: DbDep,
+    _guard=Depends(require_roles(ROLE_OWNER, ROLE_DISPATCHER)),
+):
+    from app.core.security import hash_password
+
+    u = get_tenant_scoped(db, User, ctx.tenant_id, user_id, "User not found")
+    data = body.model_dump(exclude_unset=True)
+    if "password" in data:
+        pwd = data.pop("password")
+        if pwd:
+            u.password_hash = hash_password(pwd)
+    for k, v in data.items():
+        setattr(u, k, v)
+        
+    db.commit()
+    return UserOut.model_validate(u)
+
+@router.delete("/users/{user_id}", status_code=204)
+def delete_user(
+    user_id: UUID,
+    ctx: AuthDep,
+    db: DbDep,
+    _guard=Depends(require_roles(ROLE_OWNER, ROLE_DISPATCHER)),
+):
+    u = get_tenant_scoped(db, User, ctx.tenant_id, user_id, "User not found")
+    # Soft delete
+    u.is_active = False
+    db.commit()
+    return None
+
 
 @router.get("/cylinder-types", response_model=list[CylinderTypeOut])
 def list_cylinders(ctx: AuthDep, db: DbDep):
@@ -131,6 +169,65 @@ def create_cylinder(
     return CylinderTypeOut.model_validate(c)
 
 
+@router.patch("/cylinder-types/{cylinder_type_id}", response_model=CylinderTypeOut)
+def update_cylinder(
+    cylinder_type_id: UUID,
+    body: CylinderTypeUpdate,
+    ctx: AuthDep,
+    db: DbDep,
+    _guard=Depends(require_roles(ROLE_OWNER, ROLE_DISPATCHER, ROLE_WAREHOUSE)),
+):
+    c = get_tenant_scoped(db, CylinderType, ctx.tenant_id, cylinder_type_id, "Cylinder type not found")
+    data = body.model_dump(exclude_unset=True)
+    if "gas_type" in data and data["gas_type"] not in ("butane", "propane"):
+        raise ValidationException("gas_type must be butane or propane")
+    
+    before = {
+        "gas_type": c.gas_type,
+        "size_kg": float(c.size_kg),
+        "deposit_amount_mad": float(c.deposit_amount_mad),
+        "base_sale_price_mad": float(c.base_sale_price_mad),
+        "is_active": c.is_active,
+    }
+    for k, val in data.items():
+        setattr(c, k, val)
+    db.flush()
+    write_audit(
+        db,
+        tenant_id=ctx.tenant_id,
+        actor_id=ctx.user_id,
+        action="cylinder_type.update",
+        target_entity="cylinder_types",
+        target_id=c.id,
+        before_state=before,
+        after_state=body.model_dump(exclude_unset=True),
+    )
+    db.commit()
+    return CylinderTypeOut.model_validate(c)
+
+
+@router.delete("/cylinder-types/{cylinder_type_id}", status_code=204)
+def delete_cylinder(
+    cylinder_type_id: UUID,
+    ctx: AuthDep,
+    db: DbDep,
+    _guard=Depends(require_roles(ROLE_OWNER, ROLE_DISPATCHER)),
+):
+    c = get_tenant_scoped(db, CylinderType, ctx.tenant_id, cylinder_type_id, "Cylinder type not found")
+    write_audit(
+        db,
+        tenant_id=ctx.tenant_id,
+        actor_id=ctx.user_id,
+        action="cylinder_type.delete",
+        target_entity="cylinder_types",
+        target_id=c.id,
+        before_state={"gas_type": c.gas_type, "size_kg": float(c.size_kg)},
+    )
+    db.delete(c)
+    db.commit()
+    return None
+
+
 @router.get("/vehicles", response_model=list[VehicleOut])
 def list_vehicles(ctx: AuthDep, db: DbDep):
     return [VehicleOut.model_validate(v) for v in list_tenant(db, Vehicle, ctx.tenant_id)]
@@ -151,8 +248,57 @@ def create_vehicle(
     )
     db.add(v)
     db.flush()
+    # Ensure corresponding vehicle inventory location exists
+    loc = InventoryLocation(
+        tenant_id=ctx.tenant_id,
+        name=f"Camion {body.plate_number}",
+        type="vehicle",
+        reference_id=v.id,
+    )
+    db.add(loc)
+    db.flush()
     db.commit()
     return VehicleOut.model_validate(v)
+
+
+@router.patch("/vehicles/{vehicle_id}", response_model=VehicleOut)
+def update_vehicle(
+    vehicle_id: UUID,
+    body: VehicleUpdate,
+    ctx: AuthDep,
+    db: DbDep,
+    _guard=Depends(require_roles(ROLE_OWNER, ROLE_DISPATCHER, ROLE_WAREHOUSE)),
+):
+    v = get_tenant_scoped(db, Vehicle, ctx.tenant_id, vehicle_id, "Vehicle not found")
+    data = body.model_dump(exclude_unset=True)
+    for k, val in data.items():
+        setattr(v, k, val)
+    db.flush()
+    db.commit()
+    return VehicleOut.model_validate(v)
+
+
+@router.delete("/vehicles/{vehicle_id}", status_code=204)
+def delete_vehicle(
+    vehicle_id: UUID,
+    ctx: AuthDep,
+    db: DbDep,
+    _guard=Depends(require_roles(ROLE_OWNER, ROLE_DISPATCHER)),
+):
+    v = get_tenant_scoped(db, Vehicle, ctx.tenant_id, vehicle_id, "Vehicle not found")
+    # Also remove inventory location for this vehicle if exists
+    locs = db.execute(
+        select(InventoryLocation).where(
+            InventoryLocation.tenant_id == ctx.tenant_id,
+            InventoryLocation.type == "vehicle",
+            InventoryLocation.reference_id == vehicle_id,
+        )
+    ).scalars().all()
+    for l in locs:
+        db.delete(l)
+    db.delete(v)
+    db.commit()
+    return None
 
 
 @router.get("/outlets", response_model=list[OutletOut])
@@ -224,3 +370,25 @@ def update_outlet(
     )
     db.commit()
     return OutletOut.model_validate(o)
+
+
+@router.delete("/outlets/{outlet_id}", status_code=204)
+def delete_outlet(
+    outlet_id: UUID,
+    ctx: AuthDep,
+    db: DbDep,
+    _guard=Depends(require_roles(ROLE_OWNER, ROLE_DISPATCHER)),
+):
+    o = get_tenant_scoped(db, Outlet, ctx.tenant_id, outlet_id, "Outlet not found")
+    write_audit(
+        db,
+        tenant_id=ctx.tenant_id,
+        actor_id=ctx.user_id,
+        action="outlet.delete",
+        target_entity="outlets",
+        target_id=o.id,
+        before_state={"name": o.name, "phone": o.phone},
+    )
+    db.delete(o)
+    db.commit()
+    return None

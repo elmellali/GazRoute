@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { useI18n } from "@/components/LanguageProvider";
+import ForbiddenError from "@/components/ForbiddenError";
 
 type Overview = {
   active_trucks: number;
@@ -30,6 +31,9 @@ export default function OverviewPage() {
     return () => clearInterval(id);
   }, []);
 
+  if (error && error.toLowerCase().includes("not permitted")) {
+    return <ForbiddenError error={error} />;
+  }
   if (error) return <div className="alert-banner error">⚠️ {error}</div>;
   if (!data) return <p className="muted" style={{ padding: "var(--space-24)" }}>{t("loading")}</p>;
 

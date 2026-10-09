@@ -3,6 +3,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 
+import uuid
+from pydantic import BaseModel
+
 from app.core.deps import (
     ROLE_AUDITOR,
     ROLE_DISPATCHER,
@@ -14,8 +17,9 @@ from app.core.deps import (
 )
 from app.core.exceptions import NotFound, ValidationException
 from app.models import InventoryLocation, InventoryMovement, Outlet
+from app.repositories.base import get_tenant_scoped
 from app.schemas import InventoryBalanceItem, LocationCreate, LocationOut, MovementOut
-from app.services.inventory_journal import balance_at, balances_by_location
+from app.services.inventory_journal import balance_at, balances_by_location, log_movement
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -33,7 +37,7 @@ def create_location(
     body: LocationCreate,
     ctx: AuthDep,
     db: DbDep,
-    _guard=Depends(require_roles(ROLE_OWNER, ROLE_WAREHOUSE)),
+    _guard=Depends(require_roles(ROLE_OWNER, ROLE_WAREHOUSE, ROLE_DISPATCHER)),
 ):
     if body.type not in ("depot", "vehicle", "outlet", "quarantine"):
         raise ValidationException("invalid location type")
@@ -47,6 +51,19 @@ def create_location(
     db.flush()
     db.commit()
     return LocationOut.model_validate(loc)
+
+
+@router.delete("/locations/{location_id}", status_code=204)
+def delete_location(
+    location_id: UUID,
+    ctx: AuthDep,
+    db: DbDep,
+    _guard=Depends(require_roles(ROLE_OWNER, ROLE_WAREHOUSE, ROLE_DISPATCHER)),
+):
+    loc = get_tenant_scoped(db, InventoryLocation, ctx.tenant_id, location_id, "Location not found")
+    db.delete(loc)
+    db.commit()
+    return None
 
 
 @router.get("/balances", response_model=list[InventoryBalanceItem])
@@ -129,3 +146,42 @@ def vehicle_stock(vehicle_id: UUID, ctx: AuthDep, db: DbDep):
                     )
                 )
     return items
+
+
+class FactoryReceiptLine(BaseModel):
+    cylinder_type_id: UUID
+    quantity: float
+
+
+class FactoryReceiptIn(BaseModel):
+    depot_location_id: UUID
+    lines: list[FactoryReceiptLine]
+
+
+@router.post("/factory-receipt", status_code=201)
+def receive_from_factory(
+    body: FactoryReceiptIn,
+    ctx: AuthDep,
+    db: DbDep,
+    _guard=Depends(require_roles(ROLE_OWNER, ROLE_WAREHOUSE, ROLE_DISPATCHER)),
+):
+    depot = get_tenant_scoped(db, InventoryLocation, ctx.tenant_id, body.depot_location_id, "Dépôt non trouvé")
+    if depot.type != "depot":
+        raise ValidationException("L'emplacement cible doit être un dépôt")
+    receipt_id = uuid.uuid4()
+    for line in body.lines:
+        if line.quantity > 0:
+            log_movement(
+                db,
+                tenant_id=ctx.tenant_id,
+                cylinder_type_id=line.cylinder_type_id,
+                cylinder_state="full",
+                quantity=line.quantity,
+                from_location_id=None,
+                to_location_id=depot.id,
+                source_type="FACTORY_RECEIPT",
+                source_id=receipt_id,
+                created_by=ctx.user_id,
+            )
+    db.commit()
+    return {"status": "ok", "receipt_id": str(receipt_id)}

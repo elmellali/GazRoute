@@ -601,4 +601,57 @@ def test_live_fleet_telemetry(client, tenant_ctx, tokens):
     assert truck["speed_kmh"] == 42.5
 
 
+def test_users_crud(client, tenant_ctx, tokens):
+    # 1. Create a user
+    r = client.post(
+        "/api/v1/users",
+        headers=auth(tokens["owner"]),
+        json={
+            "phone": "+212699999999",
+            "full_name": "Test User",
+            "role": "agent",
+            "preferred_lang": "fr",
+        },
+    )
+    assert r.status_code == 201, r.text
+    u = r.json()
+    user_id = u["id"]
+    assert u["phone"] == "+212699999999"
+    assert u["is_active"] is True
 
+    # 2. Update user
+    r_patch = client.patch(
+        f"/api/v1/users/{user_id}",
+        headers=auth(tokens["owner"]),
+        json={
+            "full_name": "Updated Name",
+            "role": "dispatcher",
+        },
+    )
+    assert r_patch.status_code == 200, r_patch.text
+    assert r_patch.json()["full_name"] == "Updated Name"
+    assert r_patch.json()["role"] == "dispatcher"
+
+    # 3. Soft delete user (toggle inactive)
+    r_del = client.delete(
+        f"/api/v1/users/{user_id}",
+        headers=auth(tokens["owner"]),
+    )
+    assert r_del.status_code == 204, r_del.text
+
+    # 4. Check user is now inactive
+    r_get = client.get("/api/v1/users", headers=auth(tokens["owner"]))
+    assert r_get.status_code == 200
+    users = r_get.json()
+    target = next((x for x in users if x["id"] == user_id), None)
+    assert target is not None
+    assert target["is_active"] is False
+
+    # 5. Reactivate user via patch
+    r_reactivate = client.patch(
+        f"/api/v1/users/{user_id}",
+        headers=auth(tokens["owner"]),
+        json={"is_active": True},
+    )
+    assert r_reactivate.status_code == 200, r_reactivate.text
+    assert r_reactivate.json()["is_active"] is True

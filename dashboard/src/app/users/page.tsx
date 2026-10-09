@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useI18n } from "@/components/LanguageProvider";
+import ForbiddenError from "@/components/ForbiddenError";
 
 type User = {
   id: string;
@@ -64,6 +65,7 @@ export default function UsersPage() {
   const [roleFilter, setRoleFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { t, locale } = useI18n();
   const isAr = locale === "ar";
@@ -85,7 +87,9 @@ export default function UsersPage() {
   }
 
   useEffect(() => {
-    loadUsers();
+    (async () => {
+      await loadUsers();
+    })();
   }, []);
 
   async function handleCreateUser(e: React.FormEvent) {
@@ -93,25 +97,43 @@ export default function UsersPage() {
     setIsSubmitting(true);
     setError("");
     setSuccess("");
-
     try {
-      await api("/api/v1/users", {
-        method: "POST",
-        body: JSON.stringify({
-          phone: phone.trim(),
-          full_name: fullName.trim() || undefined,
-          role,
-          preferred_lang: preferredLang,
-          password: password.trim() || undefined,
-        }),
-      });
+      if (editingUserId) {
+        await api(`/api/v1/users/${editingUserId}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            phone: phone.trim() || undefined,
+            full_name: fullName.trim() || undefined,
+            role,
+            preferred_lang: preferredLang,
+            password: password.trim() || undefined,
+          }),
+        });
+        setSuccess(
+          isAr
+            ? `تم تحديث المستخدم بنجاح.`
+            : `Utilisateur mis à jour avec succès.`
+        );
+      } else {
+        await api("/api/v1/users", {
+          method: "POST",
+          body: JSON.stringify({
+            phone: phone.trim(),
+            full_name: fullName.trim() || undefined,
+            role,
+            preferred_lang: preferredLang,
+            password: password.trim() || undefined,
+          }),
+        });
+        setSuccess(
+          isAr
+            ? `تم إنشاء المستخدم (${phone}) بنجاح.`
+            : `Utilisateur (${phone}) créé avec succès avec le rôle [${role}].`
+        );
+      }
 
-      setSuccess(
-        isAr
-          ? `تم إنشاء المستخدم (${phone}) بنجاح.`
-          : `Utilisateur (${phone}) créé avec succès avec le rôle [${role}].`
-      );
       setShowCreate(false);
+      setEditingUserId(null);
       setPhone("+212");
       setFullName("");
       setPassword("");
@@ -122,6 +144,40 @@ export default function UsersPage() {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  async function handleToggleStatus(user: User) {
+    try {
+      await api(`/api/v1/users/${user.id}`, {
+        method: user.is_active ? "DELETE" : "PATCH",
+        body: user.is_active ? undefined : JSON.stringify({ is_active: true }),
+      });
+      setSuccess(isAr ? "تم تغيير حالة المستخدم بنجاح." : "Statut mis à jour avec succès.");
+      await loadUsers();
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  function openEditModal(user: User) {
+    setPhone(user.phone);
+    setFullName(user.full_name || "");
+    setRole(user.role);
+    setPreferredLang(user.preferred_lang);
+    setPassword("");
+    setEditingUserId(user.id);
+    setShowCreate(true);
+  }
+
+  function openCreateModal() {
+    setPhone("+212");
+    setFullName("");
+    setRole("agent");
+    setPreferredLang("fr");
+    setPassword("");
+    setEditingUserId(null);
+    setShowCreate(true);
   }
 
   const filteredUsers = users.filter((u) => {
@@ -151,6 +207,10 @@ export default function UsersPage() {
     }
   }
 
+  if (error && error.toLowerCase().includes("not permitted")) {
+    return <ForbiddenError error={error} />;
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
       {/* Editorial Header */}
@@ -172,7 +232,7 @@ export default function UsersPage() {
           <button
             type="button"
             className="btn primary"
-            onClick={() => setShowCreate(true)}
+            onClick={openCreateModal}
             style={{ display: "flex", alignItems: "center", gap: "8px" }}
           >
             <span>+</span>
@@ -295,6 +355,7 @@ export default function UsersPage() {
                     <th>{isAr ? "اللغة" : "LANGUE"}</th>
                     <th>{isAr ? "المصادقة" : "MÉTHODES D'ACCÈS"}</th>
                     <th>{isAr ? "الحالة" : "STATUT"}</th>
+                    <th style={{ textAlign: "right" }}>{isAr ? "إجراءات" : "ACTIONS"}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -364,12 +425,32 @@ export default function UsersPage() {
                           </span>
                         </span>
                       </td>
+                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        <button
+                          type="button"
+                          className="btn secondary sm"
+                          onClick={() => openEditModal(u)}
+                          style={{ marginRight: "8px", padding: "4px 8px" }}
+                          title={isAr ? "تعديل" : "Modifier"}
+                        >
+                          ✎
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn ${u.is_active ? 'danger' : 'primary'} sm`}
+                          onClick={() => handleToggleStatus(u)}
+                          style={{ padding: "4px 8px" }}
+                          title={isAr ? (u.is_active ? "تعطيل" : "تفعيل") : (u.is_active ? "Désactiver" : "Activer")}
+                        >
+                          {u.is_active ? "✕" : "✓"}
+                        </button>
+                      </td>
                     </tr>
                   ))}
 
                   {filteredUsers.length === 0 && (
                     <tr>
-                      <td colSpan={5} style={{ textAlign: "center", padding: "32px", color: "var(--ink-muted)" }}>
+                      <td colSpan={6} style={{ textAlign: "center", padding: "32px", color: "var(--ink-muted)" }}>
                         {isAr ? "لا يوجد مستخدمون يطابقون خيارات البحث." : "Aucun utilisateur ne correspond aux critères."}
                       </td>
                     </tr>
@@ -439,14 +520,14 @@ export default function UsersPage() {
 
       {/* Create User Modal */}
       {showCreate && (
-        <div className="modal-backdrop" onClick={() => setShowCreate(false)}>
+        <div className="modal-backdrop" onClick={() => { setShowCreate(false); setEditingUserId(null); }}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "520px" }}>
             <div className="modal-header">
-              <div className="panel-title">{isAr ? "إضافة مستخدم جديد" : "Création d'un Nouveau Compte"}</div>
+              <div className="panel-title">{editingUserId ? (isAr ? "تعديل المستخدم" : "Modifier l'Utilisateur") : (isAr ? "إضافة مستخدم جديد" : "Création d'un Nouveau Compte")}</div>
               <button
                 type="button"
                 className="btn secondary sm"
-                onClick={() => setShowCreate(false)}
+                onClick={() => { setShowCreate(false); setEditingUserId(null); }}
                 aria-label="Fermer"
               >
                 ✕
@@ -523,11 +604,17 @@ export default function UsersPage() {
                 </div>
               </div>
 
+              {error && (
+                <div style={{ padding: "12px 16px", margin: "16px 20px 0 20px", background: "var(--signal-danger-bg)", border: "1px solid var(--signal-danger-border)", color: "#FCA5A5" }}>
+                  ⚠️ {error}
+                </div>
+              )}
+
               <div className="modal-footer">
                 <button
                   type="button"
                   className="btn secondary"
-                  onClick={() => setShowCreate(false)}
+                  onClick={() => { setShowCreate(false); setEditingUserId(null); }}
                 >
                   {isAr ? "إلغاء" : "Annuler"}
                 </button>
@@ -536,7 +623,7 @@ export default function UsersPage() {
                   className="btn primary"
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? (isAr ? "جاري الإنشاء..." : "Création…") : (isAr ? "حفظ المستخدم" : "Créer l'Utilisateur")}
+                  {isSubmitting ? (isAr ? "جاري الحفظ..." : "Sauvegarde…") : (isAr ? "حفظ المستخدم" : "Enregistrer l'Utilisateur")}
                 </button>
               </div>
             </form>
