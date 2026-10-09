@@ -25,3 +25,5 @@ services:
         value: "https://votre-domaine-vercel.vercel.app"
       - key: ENV
         value: "prod"
+      - key: PYTHON_VERSION
+        value: "3.12.0"
