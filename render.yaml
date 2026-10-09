@@ -22,7 +22,7 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: CORS_ORIGINS
-        value: "https://votre-domaine-vercel.vercel.app"
+        value: "https://gaz-route.vercel.app,http://localhost:3000"
       - key: ENV
         value: "prod"
       - key: PYTHON_VERSION
