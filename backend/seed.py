@@ -1,7 +1,9 @@
 import os
+from decimal import Decimal
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from app.models.entities import Tenant, User, DepotLocation, CylinderType, Vehicle, Outlet, PricingMatrix
+from geoalchemy2.elements import WKTElement
+from app.models.entities import Tenant, User, InventoryLocation, CylinderType, Vehicle, Outlet
 from app.core.security import hash_password
 
 def seed_database():
@@ -39,25 +41,23 @@ def seed_database():
         session.flush()
         
         # 3. Base Entities
-        depot = DepotLocation(tenant_id=tenant.id, name="Dépôt Central Casa", latitude=33.5731, longitude=-7.5898, type="warehouse")
+        depot = InventoryLocation(tenant_id=tenant.id, name="Dépôt Central Casa", type="depot")
         session.add(depot)
         
-        ct1 = CylinderType(tenant_id=tenant.id, name="Butane 12kg", brand="Afriquia", current_deposit_fee_mad=100.0)
-        ct2 = CylinderType(tenant_id=tenant.id, name="Butane 3kg", brand="Afriquia", current_deposit_fee_mad=50.0)
+        ct1 = CylinderType(tenant_id=tenant.id, gas_type="butane", size_kg=Decimal("12.00"), deposit_amount_mad=Decimal("100"), base_sale_price_mad=Decimal("40"))
+        ct2 = CylinderType(tenant_id=tenant.id, gas_type="butane", size_kg=Decimal("3.00"), deposit_amount_mad=Decimal("50"), base_sale_price_mad=Decimal("12"))
         session.add_all([ct1, ct2])
         
-        veh = Vehicle(tenant_id=tenant.id, license_plate="1234-A-50", type="truck", capacity_kg=5000.0, current_depot_id=depot.id)
+        veh = Vehicle(tenant_id=tenant.id, plate_number="1234-A-50", model="Isuzu NQR")
         session.add(veh)
         
-        outlet = Outlet(tenant_id=tenant.id, name="Hanout Al Baraka", phone="+212611111111", latitude=33.5831, longitude=-7.5998, address="Bd Anfa, Casa")
+        outlet = Outlet(tenant_id=tenant.id, name="Hanout Al Baraka", phone="+212611111111", location=WKTElement("POINT(-7.5998 33.5831)", srid=4326))
         session.add(outlet)
         
         session.flush()
         
-        # 4. Pricing Matrix
-        pm1 = PricingMatrix(tenant_id=tenant.id, outlet_id=outlet.id, cylinder_type_id=ct1.id, override_price_mad=40.0)
-        pm2 = PricingMatrix(tenant_id=tenant.id, outlet_id=outlet.id, cylinder_type_id=ct2.id, override_price_mad=10.0)
-        session.add_all([pm1, pm2])
+        ol = InventoryLocation(tenant_id=tenant.id, name="Hanout Al Baraka", type="outlet", reference_id=outlet.id)
+        session.add(ol)
         
         session.commit()
         print("Database seed completed successfully!")
